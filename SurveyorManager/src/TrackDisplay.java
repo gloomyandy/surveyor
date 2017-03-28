@@ -36,9 +36,12 @@ public class TrackDisplay extends ZoomAndPanPanel
     int mapHeightPix;
     BufferedImage IndexedImage;
     WritableRaster raster;
+    BufferedImage debugIndexedImage;
+    WritableRaster debugRaster;
     int updateCnt = 0;
     int paintCnt = 0;
     Point targetPos=null;
+    boolean showDebug;
     
     public TrackDisplay(int sizePix, double sizeM, int mapSize)
     {
@@ -53,6 +56,10 @@ public class TrackDisplay extends ZoomAndPanPanel
         IndexColorModel cm = new IndexColorModel(8, 256, red, green, blue);
         IndexedImage = new BufferedImage(sizePix, sizePix, BufferedImage.TYPE_BYTE_INDEXED, cm);
         raster = IndexedImage.getRaster();
+        cm = new IndexColorModel(8, 256, red, green, new byte[256]);
+        debugIndexedImage = new BufferedImage(sizePix, sizePix, BufferedImage.TYPE_BYTE_INDEXED, cm);
+        debugRaster = debugIndexedImage.getRaster();
+
         // Load the robot image      
         try
         {
@@ -228,12 +235,22 @@ public class TrackDisplay extends ZoomAndPanPanel
         }
     }
     
+    public void drawDebug(byte[] debug, boolean show)
+    {
+        showDebug = show;
+        if (showDebug)
+            debugRaster.setDataElements(0, 0, mapWidthPix, mapHeightPix, debug);
+            
+    }
+    
     public void update()
     {
         synchronized (img)
         {
             gImg.clearRect(0, 0, imgrect.width, imgrect.height);
             gImg.drawRenderedImage(IndexedImage, mapTransform);
+            if (showDebug)
+                gImg.drawRenderedImage(debugIndexedImage, mapTransform);                
             gImg.drawRenderedImage(trackImage, imgTransform);
             //drawTargetPos();
             updateCnt++;

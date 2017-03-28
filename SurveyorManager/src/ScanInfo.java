@@ -1,14 +1,6 @@
 import lejos.robotics.navigation.Pose;
-import edu.wlu.cs.levy.breezyslam.components.Map;
-import edu.wlu.cs.levy.breezyslam.components.Scan;
-import edu.wlu.cs.levy.breezyslam.components.Position;
-import edu.wlu.cs.levy.breezyslam.components.Laser;
-import edu.wlu.cs.levy.breezyslam.components.URG04LX;
 import edu.wlu.cs.levy.breezyslam.components.Velocities;
-import edu.wlu.cs.levy.breezyslam.robots.WheeledRobot;
-import edu.wlu.cs.levy.breezyslam.algorithms.RMHCSLAM;
-import edu.wlu.cs.levy.breezyslam.algorithms.DeterministicSLAM;
-import edu.wlu.cs.levy.breezyslam.algorithms.SinglePositionSLAM;
+
 
 public class ScanInfo
 {

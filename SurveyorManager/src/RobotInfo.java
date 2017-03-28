@@ -60,8 +60,9 @@ public class RobotInfo
     protected boolean updateReq = false;
     final static Color[] trackColors = {Color.GREEN, Color.RED, Color.BLUE};
     final static String[] trackNames = {"odo", "slm", "od2"};
-    
-    protected Laser laser = new Laser(360, 1.0/2.0, 360.0, 10000, 0, 55);
+    protected static final int LIDAR_OFFSET = 55;
+    protected static final int ROBOT_DIAMETER = 300;
+    protected Laser laser = new Laser(360, 1.0/2.0, 360.0, 10000, 0, LIDAR_OFFSET);
     public static int    MAP_SIZE_PIXELS = 1024;
     public static double MAP_SIZE_METERS = 10.24;
     private static int    SCAN_SIZE       = 360;
@@ -71,6 +72,7 @@ public class RobotInfo
     //private SinglePositionSLAM slam = new DeterministicSLAM(laser, MAP_SIZE_PIXELS, MAP_SIZE_METERS);
 
     protected List<Pose> path = null;
+    protected byte[] debug;
 
     public RobotInfo()
     {
@@ -264,6 +266,7 @@ public class RobotInfo
             next = plan.nextPose(next);
         }
         System.out.println("t1 " + (t1-start) + " t2 " + (System.currentTimeMillis() - t1));
+        debug = plan.debugMap;
         return p;
         
     }
@@ -358,6 +361,7 @@ public class RobotInfo
         updateScans(currentScanNo);
         updateTargets(currentScanNo);
         updateMap(currentScanNo);
+        map.drawDebug(debug, displayOptions[SHOW_SCAN_HISTORY]);
         map.update();
         view.update();
         
