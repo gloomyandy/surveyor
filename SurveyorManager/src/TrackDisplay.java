@@ -36,12 +36,14 @@ public class TrackDisplay extends ZoomAndPanPanel
     int mapHeightPix;
     BufferedImage IndexedImage;
     WritableRaster raster;
-    BufferedImage debugIndexedImage;
-    WritableRaster debugRaster;
+    IndexColorModel pathCostCM;
+    BufferedImage pathCostIndexedImage;
+    WritableRaster pathCostRaster;
     int updateCnt = 0;
     int paintCnt = 0;
     Point targetPos=null;
     boolean showDebug;
+    RobotInfo robot;
     
     public TrackDisplay(int sizePix, double sizeM, int mapSize)
     {
@@ -51,14 +53,21 @@ public class TrackDisplay extends ZoomAndPanPanel
         byte [] red = new byte[256];
         byte [] green = new byte[256];
         byte [] blue = new byte[256];
+        byte [] alpha = new byte[256];
+        byte [] solidColor = new byte[256];
+        byte [] none = new byte[256];
         for(int i = 0; i < 256; i++)
+        {
             red[i] = green[i] = blue[i] = (byte)i;
+            alpha[i] = (byte)((255-i)*85/100);
+            solidColor[i] = (byte)255;
+        }
+        alpha[0] = (byte) (255*50/100);   
         IndexColorModel cm = new IndexColorModel(8, 256, red, green, blue);
         IndexedImage = new BufferedImage(sizePix, sizePix, BufferedImage.TYPE_BYTE_INDEXED, cm);
         raster = IndexedImage.getRaster();
-        cm = new IndexColorModel(8, 256, red, green, new byte[256]);
-        debugIndexedImage = new BufferedImage(sizePix, sizePix, BufferedImage.TYPE_BYTE_INDEXED, cm);
-        debugRaster = debugIndexedImage.getRaster();
+        pathCostCM = new IndexColorModel(8, 256, none, none, solidColor, alpha);
+        pathCostIndexedImage = null;
 
         // Load the robot image      
         try
@@ -215,12 +224,16 @@ public class TrackDisplay extends ZoomAndPanPanel
         raster.setDataElements(0, 0, mapWidthPix, mapHeightPix, mapbytes);
     }
     
-    public void drawTarget(Pose target, List<Pose> path, Color color)
+    public void drawPaths(RobotInfo robot, Pose target, List<Pose> path, byte[] costs, Color color)
     {
-        int width = robotImage.getWidth();
+        this.robot = robot;
         gTrack.setColor(color);
-        gTrack.drawArc((int)target.getX() - width/2, (int)target.getY()-width/2, width, width, 0, 360);
-        if (path != null)
+        if (target != null)
+        {
+            int width = robotImage.getWidth();
+            gTrack.drawArc((int)target.getX() - width/2, (int)target.getY()-width/2, width, width, 0, 360);
+        }
+        if (path != null && !path.isEmpty())
         {
             Pose prev = path.get(0);
             for(int i = 1; i < path.size(); i++)
@@ -233,14 +246,23 @@ public class TrackDisplay extends ZoomAndPanPanel
                 prev = cur;
             }
         }
+        if (costs != null)
+        {
+            if (pathCostIndexedImage == null)
+            {
+                pathCostIndexedImage = new BufferedImage(mapWidthPix, mapWidthPix, BufferedImage.TYPE_BYTE_INDEXED, pathCostCM);
+                pathCostRaster = pathCostIndexedImage.getRaster();
+            }
+            pathCostRaster.setDataElements(0, 0, mapWidthPix, mapHeightPix, costs);
+        }
+        else
+            clearPaths();
     }
     
-    public void drawDebug(byte[] debug, boolean show)
+    public void clearPaths()
     {
-        showDebug = show;
-        if (showDebug)
-            debugRaster.setDataElements(0, 0, mapWidthPix, mapHeightPix, debug);
-            
+        pathCostRaster = null;
+        pathCostIndexedImage = null;
     }
     
     public void update()
@@ -249,10 +271,9 @@ public class TrackDisplay extends ZoomAndPanPanel
         {
             gImg.clearRect(0, 0, imgrect.width, imgrect.height);
             gImg.drawRenderedImage(IndexedImage, mapTransform);
-            if (showDebug)
-                gImg.drawRenderedImage(debugIndexedImage, mapTransform);                
+            if (pathCostIndexedImage != null)
+                gImg.drawRenderedImage(pathCostIndexedImage, mapTransform);                
             gImg.drawRenderedImage(trackImage, imgTransform);
-            //drawTargetPos();
             updateCnt++;
             //System.out.println("update " + updateCnt);
             repaint();
@@ -273,6 +294,9 @@ public class TrackDisplay extends ZoomAndPanPanel
     {
         Point np = new Point((int)(p.x* ((double)mapWidthmm/imgrect.width)), (int)((imgrect.height - p.y)*((double)mapHeightmm/imgrect.height)));
         targetPos = np;
+        if (robot != null && robot.plan != null)
+            System.out.printf("x: %d + y: %d cost %f, dist %f map %d\n", np.x, np.y, robot.plan.costMap[np.x/10][np.y/10], 
+                    robot.plan.costs[np.x/10][np.y/10], (int)robot.currentScan.map[(np.y/10)*mapWidthPix+np.x/10] & 0xff);
         //drawTargetPos();
         this.repaint();
     }

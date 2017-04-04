@@ -20,18 +20,18 @@ import lejos.utility.Delay;
 
 public class RobotInfo
 {
-    public static final int SHOW_SCANS=ScanInfo.POSE_CNT;
+    public static final int SHOW_PATH_PLANNING=ScanInfo.POSE_CNT;;
+    public static final int SHOW_SCANS=SHOW_PATH_PLANNING+1;
     public static final int SHOW_SCAN_HISTORY=SHOW_SCANS+1;
     public static final int SHOW_CNT = SHOW_SCAN_HISTORY+1;
-    protected float heading = 0f;
-    public static enum RunState{INIT, RUN, PAUSE, PLAY, STEP, BACK, FORWARD, START, END, REWIND, SETPOS, EXIT};
+    public boolean[] displayOptions = {false, true, false, false, true, false};
+    
+    public static enum RunState{INIT, PAUSE, PLAY, STEP, BACK, FORWARD, START, END, REWIND, SETPOS, RUN, RUNPAUSE, EXIT};
     protected RunState state = RunState.INIT;
-    protected int pendingPos = 0;
     protected Track.TrackInfoView view;
     public String name;
-
     public Pose slamPose = new Pose();
-    public Pose odoPose = new Pose();
+    public Pose gyroPose = new Pose();
     public ScanInfo currentScan = null;
     public List<ScanInfo> scanHistory = new ArrayList<ScanInfo>();
     protected int rawScans = 0;
@@ -43,8 +43,8 @@ public class RobotInfo
     public float infraRed;
     public double distance;
     public Pose targetPose = new Pose(2560.0f, 5120.0f, 0.0f);
-    public boolean[] displayOptions = {false, true, false, true, false};
-    
+    final static Color[] trackColors = {Color.GREEN, Color.RED, Color.MAGENTA, Color.BLUE};
+    final static String[] trackNames = {"odo", "slm", "od2", "plan"};
     
     
     protected Socket sock;
@@ -54,25 +54,28 @@ public class RobotInfo
     protected Thread playbackThread;
     protected Thread slamThread;
     protected boolean active;
-    protected int playbackSpeed = 0;
     protected static Track track;
     protected TrackDisplay map;
     protected boolean updateReq = false;
-    final static Color[] trackColors = {Color.GREEN, Color.RED, Color.BLUE};
-    final static String[] trackNames = {"odo", "slm", "od2"};
+    protected int reportedScans = -1;
+    
     protected static final int LIDAR_OFFSET = 55;
-    protected static final int ROBOT_DIAMETER = 300;
+    protected static final int ROBOT_DIAMETER = 250;
     protected Laser laser = new Laser(360, 1.0/2.0, 360.0, 10000, 0, LIDAR_OFFSET);
     public static int    MAP_SIZE_PIXELS = 1024;
     public static double MAP_SIZE_METERS = 10.24;
     private static int    SCAN_SIZE       = 360;
-    public static double SCAN_QUALITY_THRESHOLD = 75000.0;
-
-    private SinglePositionSLAM slam = new RMHCSLAM(laser, MAP_SIZE_PIXELS, MAP_SIZE_METERS, 1);
+    public static double SCAN_QUALITY_THRESHOLD = 50000.0;
+    protected SinglePositionSLAM slam = new RMHCSLAM(laser, MAP_SIZE_PIXELS, MAP_SIZE_METERS, 1);
     //private SinglePositionSLAM slam = new DeterministicSLAM(laser, MAP_SIZE_PIXELS, MAP_SIZE_METERS);
+    protected int pendingPos = 0;
+    
+    public static enum PlanState{NONE, DIRECT, PLAN};
+    public PlanState planState = PlanState.NONE;
+    public GradientPlanner plan;
+    protected float heading = 0f;
 
-    protected List<Pose> path = null;
-    protected byte[] debug;
+
 
     public RobotInfo()
     {
@@ -154,6 +157,26 @@ public class RobotInfo
         targetSpeed = s;
     }
     
+    protected Pose loadPose(DataInputStream s) throws IOException
+    {
+        Pose p = new Pose();
+        p.loadObject(s);
+        return p;
+    }
+    
+    protected float getHeadingToWayPoint(GradientPlanner p, Pose start)
+    {
+        Pose prev=start;
+        Pose next=null;
+        for(int i = 0; i < 10; i++)
+        {
+            next = p.nextPose(prev);
+            if (next == null)
+                return start.angleTo(prev.getLocation());
+            prev = next;
+        }
+        return start.angleTo(next.getLocation());
+    }
 
     protected void runInput()
     {
@@ -161,6 +184,7 @@ public class RobotInfo
         long prevTimestamp = 0;
         long baseTimestamp = 0;
         int lastPoseUpdate = 0;
+        float newHeading=0.0f;
         System.out.println("Input thread running");
         while (active)
         {
@@ -172,8 +196,7 @@ public class RobotInfo
                 if (haveScan)
                 {
                     System.out.println("got scan");
-                    Pose sp = new Pose();
-                    sp.loadObject(dis);
+                    Pose sp = loadPose(dis);
                     long timestamp = dis.readLong()*1000;
                     int[] ranges = new int[SCAN_SIZE];
                     for(int i = 0; i < ranges.length; i++)
@@ -192,19 +215,11 @@ public class RobotInfo
                     prevPose = sp;
                     scan = si;
                 }
-                for(int i = 0; i < 2; i++)
-                {
-                    //if (poseReset)
-                        //poseHistory.get(i).clear();
-                    Pose p = new Pose();
-                    p.loadObject(dis);
-                    if (scan != null && i == 0)
-                        scan.poses[ScanInfo.POSE_ODO] = p;
-                        
-                    odoPose = p;
-                    //poses[i] = p;
-                    //poseHistory.get(i).add(p);
-                }
+                Pose odoPose = loadPose(dis);
+                gyroPose = loadPose(dis);
+                slamPose = loadPose(dis);
+                if (scan != null)
+                    scan.poses[ScanInfo.POSE_ODO] = odoPose;
                 actualSpeed = dis.readFloat();
                 battery = dis.readFloat();
                 switch(state)
@@ -220,24 +235,45 @@ public class RobotInfo
                     break;
                 }
                 //dos.writeFloat(heading);
-                targetPose.dumpObject(dos);
                 scan = null;
                 synchronized(scanHistory)
                 {
                     if (processedScans > lastPoseUpdate && processedScans > 10)
                     {
                         scan = scanHistory.get(processedScans-1);
-                        lastPoseUpdate = processedScans-1;
+                        lastPoseUpdate = processedScans;
                     }
                 }
                 if (scan != null && scan.distance < SCAN_QUALITY_THRESHOLD)
                 {
                     dos.writeBoolean(true);
                     scan.getPoseDelta().dumpObject(dos);
-                    //System.out.println("odo " + scan.poses[ScanInfo.POSE_ODO] + " slam " + scan.poses[ScanInfo.POSE_SLAM] + " delta " + scan.getPoseDelta());
                 }
                 else
                     dos.writeBoolean(false);
+                synchronized(this)
+                {
+                    switch(planState)
+                    {
+                    case NONE:
+                        dos.writeInt(0);
+                        //dos.writeFloat(heading);
+                        break;
+                    case DIRECT:
+                        dos.writeInt(1);
+                        targetPose.dumpObject(dos);
+                        break;
+                    case PLAN:
+                        dos.writeInt(2);
+                        targetPose.dumpObject(dos);
+                        newHeading = getHeadingToWayPoint(plan, slamPose);
+                        dos.writeFloat(newHeading);
+                        break;
+                    }
+                }
+                if (newHeading != heading)
+                    System.out.println("heading " + newHeading);
+                heading = newHeading;
                 view.update();
             } catch (IOException e)
             {
@@ -251,34 +287,44 @@ public class RobotInfo
         
     }
     
-    protected List<Pose> getPath(Pose from, Pose to)
-    {
-        long start = System.currentTimeMillis();
-        GradientPlanner plan = new GradientPlanner(currentScan.map, MAP_SIZE_PIXELS, MAP_SIZE_PIXELS, (int)(MAP_SIZE_METERS*1000), (int)(MAP_SIZE_METERS*1000) );
-        plan.findPathsTo(to);
-        long t1 = System.currentTimeMillis();
-        List<Pose> p = new ArrayList<Pose>();
-        p.add(from);
-        Pose next = plan.nextPose(from);
-        while(next != null)
-        {
-            p.add(next);
-            next = plan.nextPose(next);
-        }
-        System.out.println("t1 " + (t1-start) + " t2 " + (System.currentTimeMillis() - t1));
-        debug = plan.debugMap;
-        return p;
-        
-    }
     
-    public void setTargetPose(Pose p)
+    public void setTargetPose(Pose p, PlanState state)
     {
-        targetPose = p;
-        path = getPath(slamPose, targetPose);
+        GradientPlanner newPlan = null;
+        Pose newPose = null;
+        if (p == null)
+            state = PlanState.NONE;
+        switch(state)
+        {
+        case NONE:
+            newPose = null;
+            newPlan = null;
+            break;
+        case DIRECT:
+            newPose = p;
+            newPlan = null;
+            break;
+        case PLAN:
+            newPose = p;
+            newPlan = new GradientPlanner(currentScan.map, MAP_SIZE_PIXELS, MAP_SIZE_PIXELS, (int)(MAP_SIZE_METERS*1000), (int)(MAP_SIZE_METERS*1000) );
+            if (!newPlan.findPathsTo(p))
+            {
+                System.out.println("No path");
+                newPlan = null;
+                newPose = null;
+            }
+            break;
+        }
+        synchronized(this)
+        {
+            planState = state;
+            plan = newPlan;
+            targetPose = newPose;            
+        }
         refreshDisplay();
     }
     
-
+static long totalTime = 0;
     protected void runSlam()
     {
         // TODO Auto-generated method stub
@@ -297,6 +343,7 @@ public class RobotInfo
                         e.printStackTrace();
                     }
             }
+            long t = System.currentTimeMillis();
             ScanInfo info = scanHistory.get(processedScans);
             slam.update(info.rawScan, info.velocity);
             Position p = slam.getpos();
@@ -309,6 +356,9 @@ public class RobotInfo
                 info.update(processedScan, mapbytes, p2, slam.getDistance());
                 processedScans++;
             }
+            t = System.currentTimeMillis() - t;
+            totalTime += t;
+            System.out.println("slam time " + t + " total " + totalTime);
             long allocatedMemory      = (Runtime.getRuntime().totalMemory()-Runtime.getRuntime().freeMemory());
             long presumableFreeMemory = Runtime.getRuntime().maxMemory() - allocatedMemory;
             //System.out.println("Processed " + processedScans + " memory " + presumableFreeMemory/(1024*1024));
@@ -349,54 +399,92 @@ public class RobotInfo
         map.drawMap(scanHistory, scanNo);
     }
 
-    protected void updateTargets(int scanNo)
+    protected void updatePaths(int scanNo)
     {
-        map.drawTarget(targetPose, path, trackColors[1]);        
+        if (displayOptions[SHOW_PATH_PLANNING])
+            if (plan == null)
+                map.drawPaths(this, targetPose, null, null, trackColors[SHOW_PATH_PLANNING]);  
+            else
+                map.drawPaths(this, targetPose, plan.getPath(scanHistory.get(scanNo).poses[ScanInfo.POSE_SLAM]), plan.getCostMap(), trackColors[SHOW_PATH_PLANNING]);        
+        else
+            map.clearPaths();
     }
     
-    protected void updateDisplay()
+    protected void updateAll()
     {
-        System.out.println("Paint");
+        //System.out.println("Paint");
         updateTracks(currentScanNo);
         updateScans(currentScanNo);
-        updateTargets(currentScanNo);
+        updatePaths(currentScanNo);
         updateMap(currentScanNo);
-        map.drawDebug(debug, displayOptions[SHOW_SCAN_HISTORY]);
         map.update();
         view.update();
         
     }
     
+    protected void gotoScan(int scanNo)
+    {
+        if (scanNo < 0) scanNo = 0;
+        if (scanNo >= processedScans) scanNo = processedScans - 1;
+        currentScan = scanHistory.get(scanNo);
+        slamPose = currentScan.poses[ScanInfo.POSE_SLAM];
+        gyroPose = currentScan.poses[ScanInfo.POSE_GYRO];
+        distance = currentScan.distance;
+        currentScanNo = scanNo;
+        refreshDisplay();
+    }
     
     protected void step(int step)
     {
-        int scan = currentScanNo + step;
-        if (scan < 0) scan = 0;
-        if (scan >= processedScans) scan = processedScans - 1;
-        currentScan = scanHistory.get(scan);
-        slamPose = currentScan.poses[ScanInfo.POSE_SLAM];
-        odoPose = currentScan.poses[ScanInfo.POSE_GYRO];
-        distance = currentScan.distance;
-        /*
-        updateTracks(scan);
-        updateScans(scan);
-        map.drawTarget(targetPose, trackColors[1]);
-        updateMap(scan);
-        map.update();
-        currentScanNo = scan;
-        view.update();
-        */
-        currentScanNo = scan;
-        //updateDisplay();
-        refreshDisplay();
+        if (planState == PlanState.PLAN)
+            setTargetPose(targetPose, PlanState.PLAN);
+        gotoScan(currentScanNo + step);
     }
 
+    private void updateDisplay()
+    {
+        Boolean needUpdate = false;
+        synchronized (this)
+        {
+            if (updateReq)
+            {
+                updateReq = false;
+                reportedScans = processedScans;
+                needUpdate = true;
+            }
+        }
+        if (needUpdate)
+                updateAll();
+        map.syncDisplay();
+    }
+    
+    private void waitForChange(long timeout)
+    {
+        synchronized(this)
+        {
+            map.syncDisplay();
+            updateReq = updateReq || (reportedScans != processedScans);
+            if (!updateReq)
+                try
+                {
+                    this.wait(timeout);
+                } catch (InterruptedException e)
+                {
+                    // TODO Auto-generated catch block
+                    e.printStackTrace();
+                }
+            updateReq = updateReq || (reportedScans != processedScans);
+            map.syncDisplay();
+        }
+
+    }
+    
     protected void runPlayback()
     {
         // TODO Auto-generated method stub
         long start=0;
-        //boolean updateReq = true;
-        int reportedScans = 0;
+        int setPosCnt = 0;
+        reportedScans = 0;
 
         while (active)
         { 
@@ -414,6 +502,7 @@ public class RobotInfo
                 if (delay > 0) break;
                 step(1);
                 break;
+            case RUNPAUSE:
             case RUN:
                 if (currentScanNo + 1 >= processedScans)
                 {
@@ -452,9 +541,13 @@ public class RobotInfo
                 {
                     currentScanNo = pendingPos;
                     step(0);
+                    setPosCnt = 0;
                 }
-                if (pendingPos == currentScanNo)
+                else if (setPosCnt++ > 0)
+                {
+                    step(0);
                     setState(RunState.PAUSE);
+                }
                 //System.out.println("pp " + pendingPos + " cs " + currentScanNo);
                 break;
             case EXIT:
@@ -473,25 +566,8 @@ public class RobotInfo
             default:
                  break;
             }
-            if (updateReq)
-            {
-                updateReq = false;
-                reportedScans = processedScans;
-                updateDisplay();
-            }
-            map.syncDisplay();
-            synchronized (this)
-            {
-                try
-                {
-                    this.wait(100);
-                } catch (InterruptedException e)
-                {
-                    // TODO Auto-generated catch block
-                    e.printStackTrace();
-                }
-                updateReq = updateReq || (reportedScans != processedScans);
-            }
+            updateDisplay();
+            waitForChange(100);
         }
         
     }
@@ -595,13 +671,12 @@ public class RobotInfo
         System.out.println("avg " + (double)avg/cnt + " base " + base);
         for(int i = 0; i < 360; i++)
             System.out.printf(" %d,", (int)((double)scanData[i]/cnts[i] - a + 0.5));
-        r.playbackSpeed = 10;
         r.setState(RunState.PAUSE);
     }
     
     public void refreshDisplay()
     {
-        System.out.println("Refresh");
+        //System.out.println("Refresh");
         synchronized(this)
         {
             updateReq = true;
@@ -626,7 +701,8 @@ public class RobotInfo
     
     public void setPlaybackPos(int pos)
     {
-        if (pos == currentScanNo || state != RunState.PAUSE) return;
+        if (state == RunState.RUN || state == RunState.RUNPAUSE) return;
+        if (pos == currentScanNo) return;
         pendingPos = pos;
         System.out.println("pending " + pos + " current " + currentScanNo);
         setState(RunState.SETPOS);

@@ -48,7 +48,8 @@ public class ScanInfo
         processedScan = points;
         this.map = map;
         poses[POSE_SLAM] = pose;
-        this.distance = (double)distance/points.length;
+        //this.distance = (double)distance/points.length;
+        this.distance = (double)distance*100/65500;
     }
     
     protected float normalize(float h)

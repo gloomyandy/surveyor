@@ -84,12 +84,16 @@ public class Track
         public void update()
         {
             table.setValueAt(robot.name, 0, 1);
-            table.setValueAt(String.format("(%3.1f, %3.1f)[%3.1f]", robot.odoPose.getX(), robot.odoPose.getY(), robot.odoPose.getHeading()), 1, 1);
+            table.setValueAt(String.format("(%3.1f, %3.1f)[%3.1f]", robot.gyroPose.getX(), robot.gyroPose.getY(), robot.gyroPose.getHeading()), 1, 1);
             table.setValueAt(String.format("(%3.1f, %3.1f)[%3.1f]", robot.slamPose.getX(), robot.slamPose.getY(), robot.slamPose.getHeading()), 2, 1);
-            table.setValueAt(String.format("(%3.1f, %3.1f)[%3.1f]", robot.targetPose.getX(), robot.targetPose.getY(), robot.targetPose.getHeading()), 3, 1);
+            if (robot.targetPose == null)
+                table.setValueAt("(-, -)[-]", 3, 1);
+            else
+                table.setValueAt(String.format("(%3.1f, %3.1f)[%3.1f]", robot.targetPose.getX(), robot.targetPose.getY(), robot.targetPose.getHeading()), 3, 1);
             table.setValueAt(String.format("%3.1f", robot.actualSpeed), 4, 1);
             table.setValueAt(String.format("%3.1f", robot.battery), 5, 1);
             table.setValueAt(String.format("%3.1f", robot.infraRed), 6, 1);
+            table.setValueAt(String.format("%3.1f", robot.heading), 7, 1);
             playbackTable.setValueAt(""+robot.currentScanNo+"/"+(robot.processedScans-1), 0, 1);
             playbackTable.setValueAt(String.format("%3.1f", robot.distance), 1, 1);
             playbackTable.setValueAt(robot.getState(), 2, 1);
@@ -97,8 +101,8 @@ public class Track
                 playbackPos.setValue(robot.currentScanNo);
             if (robot.processedScans > 0)
                 playbackPos.setMaximum(robot.processedScans-1);
-            if (robot.getState() == RobotInfo.RunState.PLAY)
-                play.setText("|| ");
+            if (robot.getState() != RobotInfo.RunState.PAUSE)
+                play.setText(" || ");
             else
                 play.setText(" > ");
             
@@ -141,14 +145,14 @@ public class Track
             robot.setSpeed(newSpeed);
         }
         
-        protected void setTarget()
+        protected void setTarget(RobotInfo.PlanState state)
         {
             Point pos = map.getTargetPosition();
-            if (pos != null)
-            {
-                robot.setTargetPose(new Pose((float)pos.getX(), (float)pos.getY(), (float)0.0));
-                map.clearTargetPosition();
-            }
+            if (pos == null || state == RobotInfo.PlanState.NONE)
+                robot.setTargetPose(null, RobotInfo.PlanState.NONE);
+            else 
+                robot.setTargetPose(new Pose((float)pos.getX(), (float)pos.getY(), (float)0.0), state);
+            map.clearTargetPosition();
         }
         
     }
@@ -176,9 +180,9 @@ public class Track
                 }
             }
         });
-        RobotInfo.loadHistory(window, "/home/andy/slam/BreezySLAM-master/examples/log14.dat");
+        RobotInfo.loadHistory(window, "/home/andy/slam/BreezySLAM-master/examples/log16.dat");
         //RobotInfo.loadHistory(window, "/home/andy/Lego/ev3/eclipsews/Surveyor/bin/log.dat");
-        //RobotInfo.waitForRobots(window);
+        RobotInfo.waitForRobots(window);
     }
 
     /**
@@ -198,7 +202,7 @@ public class Track
         frame.setBounds(100, 100, 1500, 800);
         frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         //frame.getContentPane().setLayout(new MigLayout("", "[500px:500px,grow,left][200px,right]", "[grow,grow]"));
-        frame.getContentPane().setLayout(new MigLayout("", "[500px:500px,grow,left][200px,right]", "[grow, grow]"));
+        frame.getContentPane().setLayout(new MigLayout("", "[500px:500px,grow,left][240px,right]", "[grow, grow]"));
         TrackDisplay display = new TrackDisplay(RobotInfo.MAP_SIZE_PIXELS*4, RobotInfo.MAP_SIZE_METERS, RobotInfo.MAP_SIZE_PIXELS);
 
         scrollPane = new JScrollPane(display);
@@ -285,7 +289,7 @@ public class Track
         play = new JButton(" > ");
         play.addActionListener(new ActionListener() {
             public void actionPerformed(ActionEvent e) {
-                if (view.robot.getState() == RobotInfo.RunState.PLAY)
+                if (view.robot.getState() != RobotInfo.RunState.PAUSE)
                 {
                     view.robot.setState(RobotInfo.RunState.PAUSE);
                 }
@@ -379,6 +383,13 @@ public class Track
             }
         });
         panel_1.add(chckbxNewCheckBox5, "cell 0 5");
+        JCheckBox chckbxNewCheckBox6 = new JCheckBox("Show path planning");
+        chckbxNewCheckBox6.addActionListener(new ActionListener() {
+            public void actionPerformed(ActionEvent arg0) {
+                view.robot.setDisplayOption(RobotInfo.SHOW_PATH_PLANNING, ((JCheckBox)arg0.getSource()).isSelected());
+            }
+        });
+        panel_1.add(chckbxNewCheckBox6, "cell 0 6");
         chckbxNewCheckBox1.setSelected(true);    
         //chckbxNewCheckBox2.setSelected(view.robot.getDisplayOption(ScanInfo.POSE_GYRO));    
         //chckbxNewCheckBox3.setSelected(view.robot.getDisplayOption(ScanInfo.POSE_ODO));    
@@ -405,6 +416,7 @@ public class Track
                 {"Speed", null},
                 {"Bat", null},
                 {"IR", null},
+                {"Head", null},
             },
             new String[] {
                 "", ""
@@ -447,7 +459,7 @@ public class Track
                 }
                 else
                 {
-                    view.robot.setState(RobotInfo.RunState.PAUSE);
+                    view.robot.setState(RobotInfo.RunState.RUNPAUSE);
                 }
                     
             }
@@ -476,13 +488,27 @@ public class Track
         slider_2.setPaintLabels(true);
         panel_1.add(slider_2, "flowy,cell 0 3,grow");
         //panel_1.add(slider_2, "cell 0 3");  
-        JButton target = new JButton("Set target");
-        target.addActionListener(new ActionListener() {
+        JButton manualTarget = new JButton("Set direct target");
+        manualTarget.addActionListener(new ActionListener() {
             public void actionPerformed(ActionEvent e) {
-                view.setTarget();
+                view.setTarget(RobotInfo.PlanState.DIRECT);
             }
         });
-        panel_1.add(target, "flowy,cell 0 3,grow");
+        panel_1.add(manualTarget, "flowy,cell 0 4,grow");
+        JButton planTarget = new JButton("Set plan target");
+        planTarget.addActionListener(new ActionListener() {
+            public void actionPerformed(ActionEvent e) {
+                view.setTarget(RobotInfo.PlanState.PLAN);
+            }
+        });
+        panel_1.add(planTarget, "flowy,cell 0 5,grow");
+        JButton clearTarget = new JButton("Clear target");
+        clearTarget.addActionListener(new ActionListener() {
+            public void actionPerformed(ActionEvent e) {
+                view.setTarget(RobotInfo.PlanState.NONE);
+            }
+        });
+        panel_1.add(clearTarget, "flowy,cell 0 6,grow");
         //panel_1.add(target, "cell 0 4");  
         view = new TrackInfoView(panel_1, table_1, display);
 
