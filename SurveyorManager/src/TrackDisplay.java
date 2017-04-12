@@ -62,7 +62,8 @@ public class TrackDisplay extends ZoomAndPanPanel
             alpha[i] = (byte)((255-i)*85/100);
             solidColor[i] = (byte)255;
         }
-        alpha[0] = (byte) (255*50/100);   
+        alpha[0] = (byte) (255*50/100);
+        alpha[255] = (byte) 255;
         IndexColorModel cm = new IndexColorModel(8, 256, red, green, blue);
         IndexedImage = new BufferedImage(sizePix, sizePix, BufferedImage.TYPE_BYTE_INDEXED, cm);
         raster = IndexedImage.getRaster();
