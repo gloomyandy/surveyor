@@ -59,11 +59,13 @@ public class TrackDisplay extends ZoomAndPanPanel
         for(int i = 0; i < 256; i++)
         {
             red[i] = green[i] = blue[i] = (byte)i;
-            alpha[i] = (byte)((255-i)*85/100);
+            alpha[i] = (byte)((i)*85/100);
             solidColor[i] = (byte)255;
         }
-        alpha[0] = (byte) (255*50/100);
-        alpha[255] = (byte) 255;
+        alpha[255] = (byte) 0;
+        alpha[252] = (byte) 255;
+        alpha[254] = (byte) (255*50/100);
+        alpha[253] = (byte) 0;
         IndexColorModel cm = new IndexColorModel(8, 256, red, green, blue);
         IndexedImage = new BufferedImage(sizePix, sizePix, BufferedImage.TYPE_BYTE_INDEXED, cm);
         raster = IndexedImage.getRaster();
@@ -296,8 +298,8 @@ public class TrackDisplay extends ZoomAndPanPanel
         Point np = new Point((int)(p.x* ((double)mapWidthmm/imgrect.width)), (int)((imgrect.height - p.y)*((double)mapHeightmm/imgrect.height)));
         targetPos = np;
         if (robot != null && robot.plan != null)
-            System.out.printf("x: %d + y: %d cost %f, dist %f map %d\n", np.x, np.y, robot.plan.costMap[np.x/10][np.y/10], 
-                    robot.plan.costs[np.x/10][np.y/10], (int)robot.currentScan.map[(np.y/10)*mapWidthPix+np.x/10] & 0xff);
+            System.out.printf("x: %d + y: %d cost %d, dist %d map %d\n", np.x, np.y, (int)robot.plan.costMap[(np.y/10)*mapWidthPix+np.x/10] & 0xff, 
+                    Integer.MAX_VALUE - robot.plan.costs[np.x/10][np.y/10], (int)robot.currentScan.map[(np.y/10)*mapWidthPix+np.x/10] & 0xff);
         //drawTargetPos();
         this.repaint();
     }

@@ -11,9 +11,9 @@ class State
 {
     int x;
     int y;
-    double value;
+    int value;
     
-    public State(int x, int y, double value)
+    public State(int x, int y, int value)
     {
         this.x = x;
         this.y = y;
@@ -43,8 +43,8 @@ public class GradientPlanner
     protected int mapHeight;
     protected double scaleX;
     protected double scaleY;
-    protected double[][] costs;
-    protected double[][] costMap;
+    protected int[][] costs;
+    protected byte[] costMap;
     protected int[] offsetX = {1, 1, 0, -1, -1, -1, 0, 1};
     protected int[] offsetY = {0, 1, 1, 1, 0, -1, -1, -1};
     protected float[] headings = {0, 45, 90, 135, 180, -135, -90, -45};
@@ -53,16 +53,19 @@ public class GradientPlanner
     protected int[] distance2X = {0, -1, 1, 1};
     protected int[] distance2Y = {1, 1, 0, 1};
     protected Deque<State> stack = new ArrayDeque<State>();
-    protected static final double DIAG_COST = Math.sqrt(2.0);
-    protected static final double NORMAL_COST = 1.0;
-    protected static final double MAX_COST = 1000.0;
-    protected static final double MIN_COST = 0.1;
-    protected static final double GOAL = 1000*MAX_COST;
-    protected static final double EDGE_STEP = 30;
-    protected static final double FREE = MIN_COST;
-    protected static final double UNKNOWN = 0.125;
-    protected static final double OCCUPIED = 1.0;
-    protected final double robotEdgeDistance;
+    protected static final int FIX_SCALE = 256;
+    protected static final int DIAG_COST = (int)(Math.sqrt(2.0) * FIX_SCALE);
+    protected static final int NORMAL_COST = 1*FIX_SCALE;
+    protected static final int MAX_COST = 251;
+    protected static final int MIN_COST = 0;
+    protected static final int GOAL = Integer.MAX_VALUE;
+    protected static final int EDGE_STEP = 12;
+    protected static final int FREE = MIN_COST;
+    protected static final int OCCUPIED = 255;
+    protected static final int EXPANDED = 254;
+    protected static final int UNKNOWN = 253;
+    protected static final int FRONTIER = 252;
+    protected final int robotEdgeDistance;
     
     protected int reprocess=0;
 
@@ -74,7 +77,7 @@ public class GradientPlanner
         this.mapHeight = mapHeight;
         this.scaleX = (double)mapWidth/mapWidthMM;
         this.scaleY = (double)mapHeight/mapHeightMM;
-        robotEdgeDistance = (RobotInfo.ROBOT_DIAMETER*scaleX)/2*EDGE_STEP;
+        robotEdgeDistance = (OCCUPIED & 0xff)*FIX_SCALE - (int)((RobotInfo.ROBOT_DIAMETER*scaleX)/2*EDGE_STEP*FIX_SCALE);
     }
 
     /**
@@ -83,6 +86,8 @@ public class GradientPlanner
      */
     protected byte[] getCostMap()
     {
+        return costMap;
+        /*
             if (costMap == null) return null;
             double scale = 255.0;
             byte[] cm = new byte[mapWidth*mapHeight];
@@ -92,6 +97,7 @@ public class GradientPlanner
                     cm[j*mapWidth + i] = (byte)(255 - ((int)(costMap[i][j]*scale) & 0xff));
             System.out.println("built debug map");
             return cm;
+        */
     }
     
     protected boolean outOfMap(int x, int y)
@@ -102,7 +108,7 @@ public class GradientPlanner
             return false;
     }
     
-    protected void push(PriorityQueue<State> queue, int x, int y, double value)
+    protected void push(PriorityQueue<State> queue, int x, int y, int value)
     {
         State s = new State(x, y, value);
         costs[x][y] = value;
@@ -128,15 +134,15 @@ public class GradientPlanner
         synchronized(this)
         {
             long s = System.currentTimeMillis();
-            double value;
-            costMap = new double[mapWidth][mapHeight];
+            int value;
+            int[][]cm = new int[mapWidth][mapHeight];
             // populate the cost map from the slam map
             for(int y = 0; y < mapHeight; y++)
                 for(int x = 0; x < mapWidth; x++)
                 {
                     int mapCell = (int)map[y*mapWidth + x] & 0xff;
                     //costMap[x][y] = mapCell == 127 ? MAX_COST/4 : mapCell >= 110 ? MIN_COST :  MAX_COST ;
-                    costMap[x][y] = mapCell >= 110 ? MIN_COST :  MAX_COST ;
+                    cm[x][y] = ((mapCell >= 110 ? FREE :  OCCUPIED) & 0xff)*FIX_SCALE ;
                 }
             // perform a two stage distance transform scanning the map from bottom to top and then
             // top to bottom, using a different filter in each direction
@@ -145,9 +151,9 @@ public class GradientPlanner
                 {
                     for(int i = 0; i < distance1X.length; i++)
                     {
-                        value = costMap[x + distance1X[i]][y + distance1Y[i]] - EDGE_STEP*(i % 2 == 1 ? DIAG_COST : NORMAL_COST);
-                        if (value > costMap[x][y])
-                            costMap[x][y] = value;
+                        value = cm[x + distance1X[i]][y + distance1Y[i]] - EDGE_STEP*(i % 2 == 1 ? DIAG_COST : NORMAL_COST);
+                        if (value > cm[x][y])
+                            cm[x][y] = value;
                             
                     }
                 }
@@ -156,41 +162,37 @@ public class GradientPlanner
                 {
                     for(int i = 0; i < distance2X.length; i++)
                     {
-                        value = costMap[x + distance2X[i]][y + distance2Y[i]] - EDGE_STEP*(i % 2 == 1 ? DIAG_COST : NORMAL_COST);
-                        if (value > costMap[x][y])
-                            costMap[x][y] = value;
+                        value = cm[x + distance2X[i]][y + distance2Y[i]] - EDGE_STEP*(i % 2 == 1 ? DIAG_COST : NORMAL_COST);
+                        if (value > cm[x][y])
+                            cm[x][y] = value;
                             
                     }
                 }
+            costMap = new byte[mapWidth*mapHeight];
             // now expand walls etc. to provide clearance for the robot. Normalize the cost values.
             for(int y = 0; y < mapHeight; y++)
                 for(int x = 0; x < mapWidth; x++)
                 {
-                    value = costMap[x][y];
-                    if (value < MAX_COST - robotEdgeDistance)
+                    value = cm[x][y];
+                    if (value < robotEdgeDistance)
                     {
-                        /*
-                        value = value/(2*MAX_COST);
-                        if (value <= UNKNOWN)
-                        {
-                            if (((int)map[y*mapWidth + x] & 0xff) == 127)
-                                value = UNKNOWN;
-                            else if (value <= FREE)
-                                value = FREE;
-                        }
-                        */
                         if (((int)map[y*mapWidth + x] & 0xff) == 127)
                             value = UNKNOWN;
                         else
                         {
-                            value = value/(2*MAX_COST);
+                            value = value >> 8;
                             if (value <= FREE)
                                 value = FREE;
+                            if ((value & ~0xff) != 0)
+                                System.out.println("Bad value " + value);
                         }
                     }
                     else
-                        value = OCCUPIED;
-                    costMap[x][y] = value;
+                        if (value >= OCCUPIED*FIX_SCALE)
+                            value = OCCUPIED;
+                        else
+                            value = EXPANDED;
+                    costMap[y*mapWidth + x] = (byte)value;
                 }
             System.out.println("cost time " + (System.currentTimeMillis() - s));
         }
@@ -205,7 +207,7 @@ public class GradientPlanner
      */
     protected boolean isFree(int x, int y, int depth)
     {
-        if (costMap[x][y] == UNKNOWN) return false;
+        if (((int)costMap[y*mapWidth + x] & 0xff) == UNKNOWN) return false;
         int freeCnt = 0;
         // We look on each side of the start point for more than a threshold number of
         // free points. If we find this then we consider the point to be a free point.
@@ -216,7 +218,7 @@ public class GradientPlanner
             int cnt = 0;
             for(int i = 1; i < depth; i++)
                 //if (!outOfMap(x + xoff*i, y + yoff*i) && costMap[x + xoff*i][y + yoff*i] < UNKNOWN)
-                if (!outOfMap(x + xoff*i, y + yoff*i) && costMap[x + xoff*i][y + yoff*i] <= FREE)
+                if (!outOfMap(x + xoff*i, y + yoff*i) && ((int)costMap[(y + yoff*i)*mapWidth + (x + xoff*i)] & 0xff) <= FREE)
                     cnt++;
             if (cnt > 2 && ++freeCnt >= 3)
                 return true;
@@ -235,7 +237,7 @@ public class GradientPlanner
      */
     protected boolean isUnknown(int x, int y, int depth)
     {
-        if (costMap[x][y] != UNKNOWN) return false;
+        if (((int)costMap[y*mapWidth + x] & 0xff) != UNKNOWN) return false;
         boolean[] unknown = new boolean[offsetX.length];
         int adjCnt = 0;
         // We search lines radiating out from the current point, for the specified depth. We only consdier
@@ -245,7 +247,7 @@ public class GradientPlanner
             int xoff = offsetX[j];
             int yoff = offsetY[j];
             int cnt = 1;
-            while(cnt < depth && !outOfMap(x + xoff*cnt, y + yoff*cnt) && costMap[x + xoff*cnt][y + yoff*cnt] == UNKNOWN)
+            while(cnt < depth && !outOfMap(x + xoff*cnt, y + yoff*cnt) && ((int)costMap[(y + yoff*cnt)*mapWidth + (x + xoff*cnt)] & 0xff) == UNKNOWN)
                 cnt++;
             unknown[j] = cnt >= depth;
             if (cnt >= depth)
@@ -275,7 +277,7 @@ public class GradientPlanner
     protected boolean isFrontier(int x, int y)
     {
         //if (costMap[x][y] != FREE && costMap[x][y] != 0.11) return false;
-        if (costMap[x][y] != FREE) return false;
+        if (((int)costMap[y*mapWidth + x] & 0xff) != FREE) return false;
         boolean free = false;
         boolean unknown = false;
         for(int i = 0; i < offsetX.length; i++)
@@ -308,7 +310,7 @@ public class GradientPlanner
             for(int x = 2; x < mapWidth-2; x++)
                 if (isFrontier(x, y))
                 {
-                    costMap[x][y] = 0.0;
+                    costMap[y*mapWidth + x] = (byte)FRONTIER;
                     push(queue, x, y, 0);
                     costs[x][y] = GOAL;
                     addNeighbours(queue, x, y);
@@ -319,28 +321,32 @@ public class GradientPlanner
     
     protected void addNeighbours(PriorityQueue<State> queue, int x, int y)
     {
-        double parentCost = costs[x][y];
+        int parentCost = costs[x][y];
         //for(int i = 0; i < offsetX.length; i+=2)
         for(int i = 0; i < offsetX.length; i++)
         {
             int newX = x + offsetX[i];
             int newY = y + offsetY[i];
-            if(outOfMap(newX, newY) || costMap[newX][newY] >= 0.5)
+            if(outOfMap(newX, newY)) continue;
+            int value = ((int)costMap[newY*mapWidth + newX] & 0xff);
+            if (value >= EXPANDED)
                 continue;
-            double moveCost = ( i % 2 == 1 ? DIAG_COST : NORMAL_COST );
+            if (value == UNKNOWN)
+                value = 32;
+            int moveCost = ( i % 2 == 1 ? DIAG_COST : NORMAL_COST );
             //double newCost = parentCost + moveCost + (255-((int)map[y*mapWidth + x] & 0xff));
             //double newCost = parentCost - (moveCost * mapCost(x, y));
-            double newCost = parentCost - (moveCost + 100*(costMap[newX][newY] == 0.0 ? 0.125 : costMap[newX][newY]));
+            int newCost = parentCost - (moveCost + 16*value);
             //double newCost = parentCost - (moveCost *(costMap[newX][newY] == 0.0 ? 0.125 : costMap[newX][newY]));
             if (newCost < 0) System.out.println("-ve cost " + x + " " + y);
-            if (newCost > costs[newX][newY])
-            //if (costs[newX][newY] == 0.0)
+            //if (newCost > costs[newX][newY])
+            if (costs[newX][newY] == 0)
             {
                 if (costs[newX][newY] != 0)
                 {    
                     reprocess++;
-                    if (reprocess < 100)
-                        System.out.printf("rp %d %d old %f new %f\n", newX, newY, costs[newX][newY], newCost);
+                    //if (reprocess < 100)
+                      //  System.out.printf("rp %d %d old %d new %d\n", newX, newY, costs[newX][newY], newCost);
                 }
                 push(queue, newX, newY, newCost);
             }
@@ -365,13 +371,13 @@ public class GradientPlanner
         int y = (int)(target.getY()*scaleY);
         buildCostMap();
         long s = System.currentTimeMillis();
-        costs = new double[mapWidth][mapHeight];
-        if (costMap[x][y] >= 0.5)
+        costs = new int[mapWidth][mapHeight];
+        if (costMap[y*mapWidth + x] > EXPANDED)
             return false;
         CompareState stateCompare = new CompareState();
         PriorityQueue<State> curQueue = new PriorityQueue<State>(100, stateCompare);
-        //findFrontiers(curQueue);
-        addTarget(curQueue, x, y);
+        findFrontiers(curQueue);
+        //addTarget(curQueue, x, y);
         //push(curQueue, x, y, 0);
         //costs[x][y] = GOAL;
         //addNeighbours(curQueue, x, y);
