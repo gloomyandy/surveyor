@@ -403,9 +403,9 @@ static long totalTime = 0;
     {
         if (displayOptions[SHOW_PATH_PLANNING])
             if (plan == null)
-                map.drawPaths(this, targetPose, null, null, trackColors[SHOW_PATH_PLANNING]);  
+                map.drawPaths(this, targetPose, null, null, null, trackColors[SHOW_PATH_PLANNING]);  
             else
-                map.drawPaths(this, targetPose, plan.getPath(scanHistory.get(scanNo).poses[ScanInfo.POSE_SLAM]), plan.getCostMap(), trackColors[SHOW_PATH_PLANNING]);        
+                map.drawPaths(this, targetPose, plan.getPath(scanHistory.get(scanNo).poses[ScanInfo.POSE_SLAM]), plan.getCostMap(), plan.getFrontiers(), trackColors[SHOW_PATH_PLANNING]);        
         else
             map.clearPaths();
     }

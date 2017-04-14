@@ -1,3 +1,4 @@
+import java.awt.Rectangle;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -38,6 +39,7 @@ class CompareState implements Comparator<State>
 
 public class GradientPlanner
 {
+    protected List<Rectangle> frontiers;
     protected byte[] map;
     protected int mapWidth;
     protected int mapHeight;
@@ -98,6 +100,11 @@ public class GradientPlanner
             System.out.println("built debug map");
             return cm;
         */
+    }
+    
+    protected List<Rectangle> getFrontiers()
+    {
+        return frontiers;
     }
     
     protected boolean outOfMap(int x, int y)
@@ -240,7 +247,7 @@ public class GradientPlanner
         if (((int)costMap[y*mapWidth + x] & 0xff) != UNKNOWN) return false;
         boolean[] unknown = new boolean[offsetX.length];
         int adjCnt = 0;
-        // We search lines radiating out from the current point, for the specified depth. We only consdier
+        // We search lines radiating out from the current point, for the specified depth. We only consider
         // the area to be unknown if at least three adjacent lines are all free.
         for(int j = 0; j < offsetX.length; j++)
         {
@@ -299,24 +306,79 @@ public class GradientPlanner
                     
             }
         }
-        if (x == 821 && y == 385) System.out.println("free " + free + " unknown " + unknown);
         return false;
+    }
+    
+    protected void mergeFrontier(List<Rectangle> fl, int[][] fm, int x, int y, int depth)
+    {
+        // Search the map looking for other points that are close to this new point
+        for(int j = 0; j < distance1X.length; j++)
+        {
+            int xoff = distance1X[j];
+            int yoff = distance1Y[j];
+            int cnt = 1;
+            int frontierNo = 0;
+            while(cnt < depth && !outOfMap(x + xoff*cnt, y + yoff*cnt) && (frontierNo = fm[x + xoff*cnt][y + yoff*cnt]) == 0)
+                cnt++;
+            if (frontierNo > 0)
+            {
+                //System.out.printf("found match %d %d r %d\n", x, y, frontierNo);
+                // found an existing point, merge this one with it
+                Rectangle r = fl.get(frontierNo-1);
+                r.add(x, y);
+                // mark the point as being a member of this group
+                fm[x][y] = frontierNo;
+                return;
+            }
+        }
+        // no other point found start a new group.
+        Rectangle r = new Rectangle(x, y, 1, 1);
+        fl.add(r);
+        fm[x][y] = fl.size();
+    }
+    
+    protected List<Rectangle>mergeRects(List<Rectangle> old)
+    {
+        List<Rectangle> newList = new ArrayList<Rectangle>();
+        
+        while (!old.isEmpty())
+        {
+            Rectangle r = old.remove(0);
+            int i = 0;
+            while(i < old.size())
+            {
+                Rectangle r2 = old.get(i);
+                if (r2.intersects(r.x-5, r.y-5, r.width+10, r.height+10))
+                {
+                    r.add(r2);
+                    old.remove(i);
+                    i = 0;
+                }
+                else
+                    i++;
+            }
+            newList.add(r);
+            
+        }
+        return newList;
     }
     
     protected void findFrontiers(PriorityQueue<State> queue)
     {
+        List<Rectangle> frontierList = new ArrayList<Rectangle>();
+        int[][] frontierMap = new int[mapWidth][mapHeight];
         int cnt = 0;
         for(int y = 2; y < mapHeight-2; y++)
             for(int x = 2; x < mapWidth-2; x++)
                 if (isFrontier(x, y))
                 {
                     costMap[y*mapWidth + x] = (byte)FRONTIER;
-                    push(queue, x, y, 0);
-                    costs[x][y] = GOAL;
-                    addNeighbours(queue, x, y);
+                    addTarget(queue, x, y);
+                    mergeFrontier(frontierList, frontierMap, x, y, 20);
                     cnt++;
                 }
-        System.out.println("Frontier count " + cnt);
+        System.out.println("Frontier count " + cnt + " f rects " + frontierList.size());
+        frontiers = mergeRects(frontierList);
     }
     
     protected void addNeighbours(PriorityQueue<State> queue, int x, int y)

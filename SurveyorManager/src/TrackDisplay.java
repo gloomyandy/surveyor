@@ -5,6 +5,7 @@ import java.awt.Graphics;
 import java.awt.Graphics2D;
 import java.awt.Image;
 import java.awt.Point;
+import java.awt.Rectangle;
 import java.awt.RenderingHints;
 import java.awt.geom.AffineTransform;
 import java.awt.image.BufferedImage;
@@ -227,7 +228,7 @@ public class TrackDisplay extends ZoomAndPanPanel
         raster.setDataElements(0, 0, mapWidthPix, mapHeightPix, mapbytes);
     }
     
-    public void drawPaths(RobotInfo robot, Pose target, List<Pose> path, byte[] costs, Color color)
+    public void drawPaths(RobotInfo robot, Pose target, List<Pose> path, byte[] costs, List<Rectangle> frontiers, Color color)
     {
         this.robot = robot;
         gTrack.setColor(color);
@@ -260,6 +261,12 @@ public class TrackDisplay extends ZoomAndPanPanel
         }
         else
             clearPaths();
+        
+        if (frontiers != null)
+        {
+            for(Rectangle r : frontiers)
+                gTrack.drawRect(r.x*10, r.y*10, r.width*10, r.height*10);
+        }
     }
     
     public void clearPaths()
