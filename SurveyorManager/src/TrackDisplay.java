@@ -228,15 +228,20 @@ public class TrackDisplay extends ZoomAndPanPanel
         raster.setDataElements(0, 0, mapWidthPix, mapHeightPix, mapbytes);
     }
     
-    public void drawPaths(RobotInfo robot, Pose target, List<Pose> path, byte[] costs, List<Rectangle> frontiers, Color color)
+    public void drawPaths(RobotInfo robot, Pose target, List<Pose> path, byte[] costs, List<Point> frontiers, Color color)
     {
         this.robot = robot;
         gTrack.setColor(color);
+        int width = robotImage.getWidth();
         if (target != null)
         {
-            int width = robotImage.getWidth();
             gTrack.drawArc((int)target.getX() - width/2, (int)target.getY()-width/2, width, width, 0, 360);
+            gTrack.drawLine((int)target.getX() - width/2, (int)target.getY()-width/2, (int)target.getX() + width/2, (int)target.getY()+width/2);
+            gTrack.drawLine((int)target.getX() - width/2, (int)target.getY()+width/2, (int)target.getX() + width/2, (int)target.getY()-width/2);
         }
+        if (frontiers != null)
+            for(Point p : frontiers)
+                gTrack.drawArc((int)p.x - width/2, (int)p.y-width/2, width, width, 0, 360);
         if (path != null && !path.isEmpty())
         {
             Pose prev = path.get(0);
@@ -261,12 +266,6 @@ public class TrackDisplay extends ZoomAndPanPanel
         }
         else
             clearPaths();
-        
-        if (frontiers != null)
-        {
-            for(Rectangle r : frontiers)
-                gTrack.drawRect(r.x*10, r.y*10, r.width*10, r.height*10);
-        }
     }
     
     public void clearPaths()

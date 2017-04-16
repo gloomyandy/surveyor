@@ -70,10 +70,11 @@ public class RobotInfo
     //private SinglePositionSLAM slam = new DeterministicSLAM(laser, MAP_SIZE_PIXELS, MAP_SIZE_METERS);
     protected int pendingPos = 0;
     
-    public static enum PlanState{NONE, DIRECT, PLAN};
+    public static enum PlanState{NONE, DIRECT, PLAN, EXPLORE, HOME};
     public PlanState planState = PlanState.NONE;
     public GradientPlanner plan;
     protected float heading = 0f;
+    protected Pose homePose = new Pose(2560, 5120, 0);
 
 
 
@@ -264,6 +265,7 @@ public class RobotInfo
                         targetPose.dumpObject(dos);
                         break;
                     case PLAN:
+                    case EXPLORE:
                         dos.writeInt(2);
                         targetPose.dumpObject(dos);
                         newHeading = getHeadingToWayPoint(plan, slamPose);
@@ -292,8 +294,6 @@ public class RobotInfo
     {
         GradientPlanner newPlan = null;
         Pose newPose = null;
-        if (p == null)
-            state = PlanState.NONE;
         switch(state)
         {
         case NONE:
@@ -304,14 +304,34 @@ public class RobotInfo
             newPose = p;
             newPlan = null;
             break;
+        case HOME:
+            p = homePose;
+            state = PlanState.PLAN;
         case PLAN:
             newPose = p;
             newPlan = new GradientPlanner(currentScan.map, MAP_SIZE_PIXELS, MAP_SIZE_PIXELS, (int)(MAP_SIZE_METERS*1000), (int)(MAP_SIZE_METERS*1000) );
-            if (!newPlan.findPathsTo(p))
+            if (!newPlan.findPath(slamPose, p))
             {
                 System.out.println("No path");
                 newPlan = null;
                 newPose = null;
+                state = PlanState.NONE;
+            }
+            break;
+        case EXPLORE:
+            newPose = p;
+            newPlan = new GradientPlanner(currentScan.map, MAP_SIZE_PIXELS, MAP_SIZE_PIXELS, (int)(MAP_SIZE_METERS*1000), (int)(MAP_SIZE_METERS*1000) );
+            List<Pose> path;
+            if (!newPlan.explore(slamPose) || (path = newPlan.getPath(slamPose)).size() == 0)
+            {
+                System.out.println("No path");
+                newPlan = null;
+                newPose = null;
+                state = PlanState.NONE;
+            }
+            else
+            {
+                newPose = path.get(path.size()-1);
             }
             break;
         }
@@ -436,8 +456,8 @@ static long totalTime = 0;
     
     protected void step(int step)
     {
-        if (planState == PlanState.PLAN)
-            setTargetPose(targetPose, PlanState.PLAN);
+        if (planState == PlanState.PLAN || planState == PlanState.EXPLORE)
+            setTargetPose(targetPose, planState);
         gotoScan(currentScanNo + step);
     }
 

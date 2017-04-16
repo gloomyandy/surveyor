@@ -1,3 +1,4 @@
+import java.awt.Point;
 import java.awt.Rectangle;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
@@ -39,7 +40,7 @@ class CompareState implements Comparator<State>
 
 public class GradientPlanner
 {
-    protected List<Rectangle> frontiers;
+    protected List<Point> frontiers;
     protected byte[] map;
     protected int mapWidth;
     protected int mapHeight;
@@ -61,7 +62,7 @@ public class GradientPlanner
     protected static final int MAX_COST = 251;
     protected static final int MIN_COST = 0;
     protected static final int GOAL = Integer.MAX_VALUE;
-    protected static final int EDGE_STEP = 12;
+    protected static final int EDGE_STEP = 10;
     protected static final int FREE = MIN_COST;
     protected static final int OCCUPIED = 255;
     protected static final int EXPANDED = 254;
@@ -102,7 +103,7 @@ public class GradientPlanner
         */
     }
     
-    protected List<Rectangle> getFrontiers()
+    protected List<Point> getFrontiers()
     {
         return frontiers;
     }
@@ -227,7 +228,7 @@ public class GradientPlanner
                 //if (!outOfMap(x + xoff*i, y + yoff*i) && costMap[x + xoff*i][y + yoff*i] < UNKNOWN)
                 if (!outOfMap(x + xoff*i, y + yoff*i) && ((int)costMap[(y + yoff*i)*mapWidth + (x + xoff*i)] & 0xff) <= FREE)
                     cnt++;
-            if (cnt > 2 && ++freeCnt >= 3)
+            if (cnt > 3 && ++freeCnt >= 3)
                 return true;
         }
         return false;
@@ -289,7 +290,7 @@ public class GradientPlanner
         boolean unknown = false;
         for(int i = 0; i < offsetX.length; i++)
         {
-            free = free || isFree(x+offsetX[i], y+offsetY[i], 20);
+            free = free || isFree(x+offsetX[i], y+offsetY[i], 15);
             unknown = unknown || isUnknown(x+offsetX[i], y+offsetY[i], 15);
             if (free && unknown)
             {
@@ -309,7 +310,7 @@ public class GradientPlanner
         return false;
     }
     
-    protected void mergeFrontier(List<Rectangle> fl, int[][] fm, int x, int y, int depth)
+    protected void mergeFrontier(List<List<Point>> fl, int[][] fm, int x, int y, int depth)
     {
         // Search the map looking for other points that are close to this new point
         for(int j = 0; j < distance1X.length; j++)
@@ -318,54 +319,86 @@ public class GradientPlanner
             int yoff = distance1Y[j];
             int cnt = 1;
             int frontierNo = 0;
-            while(cnt < depth && !outOfMap(x + xoff*cnt, y + yoff*cnt) && (frontierNo = fm[x + xoff*cnt][y + yoff*cnt]) == 0)
-                cnt++;
-            if (frontierNo > 0)
+            while(cnt < depth && !outOfMap(x + xoff*cnt, y + yoff*cnt))
             {
-                //System.out.printf("found match %d %d r %d\n", x, y, frontierNo);
-                // found an existing point, merge this one with it
-                Rectangle r = fl.get(frontierNo-1);
-                r.add(x, y);
-                // mark the point as being a member of this group
-                fm[x][y] = frontierNo;
-                return;
+                frontierNo = fm[x + xoff*cnt][y + yoff*cnt];
+                if (frontierNo > 0)
+                {
+                    
+                    if (fm[x][y] == 0 || fm[x][y] == frontierNo)
+                    {
+                        List<Point> pl = fl.get(frontierNo-1);
+                        pl.add(new Point(x, y));
+                        fm[x][y] = frontierNo;
+                    }
+                    else
+                    {
+                        // current point already in a list, need to merge two lists
+                        List<Point> pl1 = fl.get(frontierNo-1);
+                        List<Point> pl2 = fl.get(fm[x][y]-1);
+                        while(!pl2.isEmpty())
+                        {
+                            Point p = pl2.remove(0);
+                            fm[p.x][p.y] = frontierNo;
+                            pl1.add(p);
+                        }
+                        fm[x][y] = frontierNo;
+                        
+                    }
+
+                }
+                cnt++;
             }
         }
-        // no other point found start a new group.
-        Rectangle r = new Rectangle(x, y, 1, 1);
-        fl.add(r);
-        fm[x][y] = fl.size();
+        if (fm[x][y] == 0)
+        {
+            // no other point found start a new group.
+            List<Point> pl = new ArrayList<Point>();
+            pl.add(new Point(x, y));
+            fl.add(pl);
+            fm[x][y] = fl.size();
+        }
     }
     
-    protected List<Rectangle>mergeRects(List<Rectangle> old)
+    protected List<Point>getFrontierTargets(List<List<Point>> old)
     {
-        List<Rectangle> newList = new ArrayList<Rectangle>();
-        
-        while (!old.isEmpty())
-        {
-            Rectangle r = old.remove(0);
-            int i = 0;
-            while(i < old.size())
+        int minSize = (int)(RobotInfo.ROBOT_DIAMETER*scaleX/2);
+        List<Point> newList = new ArrayList<Point>();
+        for(List<Point> pl : old)
+            if (pl.size() > 10)
             {
-                Rectangle r2 = old.get(i);
-                if (r2.intersects(r.x-5, r.y-5, r.width+10, r.height+10))
+                Rectangle r = null;
+                int x = 0;
+                int y = 0;
+                for(Point p : pl)
                 {
-                    r.add(r2);
-                    old.remove(i);
-                    i = 0;
+                    if (r == null)
+                        r = new Rectangle(p.x, p.y, 1, 1);
+                    else
+                        r.add(p);
+                    x += p.x;
+                    y += p.y;
                 }
-                else
-                    i++;
+                if (r.width > minSize || r.height > minSize)
+                {
+                    x = x/pl.size();
+                    y = y/pl.size();
+                    // make sure the target is reachable!
+                    if (costMap[y*mapWidth + x] > EXPANDED)
+                    {
+                        System.out.println("Can't reach target " + x + ", " + y);
+                        x = pl.get(0).x;
+                        y = pl.get(0).y;
+                    }
+                    newList.add(new Point((int)(x/scaleX), (int)(y/scaleY)));
+                }
             }
-            newList.add(r);
-            
-        }
         return newList;
     }
     
-    protected void findFrontiers(PriorityQueue<State> queue)
+    protected int findFrontiers(PriorityQueue<State> queue)
     {
-        List<Rectangle> frontierList = new ArrayList<Rectangle>();
+        List<List<Point>> frontierList = new ArrayList<List<Point>>();
         int[][] frontierMap = new int[mapWidth][mapHeight];
         int cnt = 0;
         for(int y = 2; y < mapHeight-2; y++)
@@ -373,12 +406,27 @@ public class GradientPlanner
                 if (isFrontier(x, y))
                 {
                     costMap[y*mapWidth + x] = (byte)FRONTIER;
-                    addTarget(queue, x, y);
-                    mergeFrontier(frontierList, frontierMap, x, y, 20);
+                    //addTarget(queue, x, y);
+                    mergeFrontier(frontierList, frontierMap, x, y, 10);
                     cnt++;
                 }
-        System.out.println("Frontier count " + cnt + " f rects " + frontierList.size());
-        frontiers = mergeRects(frontierList);
+        //System.out.println("Frontier count " + cnt + " f rects " + frontierList.size());
+        frontiers = getFrontierTargets(frontierList);
+        int step = mapWidth/8;
+        for(int x = step; x < mapWidth; x += step)
+        {
+            frontiers.add(new Point((int)(x/scaleX), 0));
+            frontiers.add(new Point((int)(x/scaleX), (int)((mapHeight-1)/scaleY)));            
+        }
+        for(int y = step; y < mapHeight; y += step)
+        {
+            frontiers.add(new Point(0, (int)(y/scaleY)));
+            frontiers.add(new Point((int)((mapWidth-1)/scaleX), (int)(y/scaleY)));            
+        }
+        for(Point p : frontiers)
+            addTarget(queue, (int)(p.x*scaleX), (int)(p.y*scaleY));
+        System.out.println("Frontier count " + cnt + " pl " + frontierList.size() + " targets " + frontiers.size());
+        return frontiers.size();
     }
     
     protected void addNeighbours(PriorityQueue<State> queue, int x, int y)
@@ -419,40 +467,60 @@ public class GradientPlanner
         }
     }
     
-    public void addTarget(PriorityQueue<State> queue,int x, int y)
+    protected void addTarget(PriorityQueue<State> queue,int x, int y)
     {
         push(queue, x, y, 0);
         costs[x][y] = GOAL;
         addNeighbours(queue, x, y);        
     }
-    
-    public boolean findPathsTo(Pose target)
+
+    protected void search(PriorityQueue<State> queue)
     {
-        System.out.println("fpt");
-        int x = (int)(target.getX()*scaleX);
-        int y = (int)(target.getY()*scaleY);
-        buildCostMap();
         long s = System.currentTimeMillis();
-        costs = new int[mapWidth][mapHeight];
-        if (costMap[y*mapWidth + x] > EXPANDED)
-            return false;
-        CompareState stateCompare = new CompareState();
-        PriorityQueue<State> curQueue = new PriorityQueue<State>(100, stateCompare);
-        findFrontiers(curQueue);
-        //addTarget(curQueue, x, y);
-        //push(curQueue, x, y, 0);
-        //costs[x][y] = GOAL;
-        //addNeighbours(curQueue, x, y);
         int cnt1 = 1;
-        while(!curQueue.isEmpty())
+        while(!queue.isEmpty())
         {
             cnt1++;
-            State curItem = pop(curQueue);
-            if (curItem.value > costs[curItem.x][curItem.y])
-                System.out.printf("Skipping push %f %f\n", curItem.x, curItem.y);
-            addNeighbours(curQueue, curItem.x, curItem.y);
+            State curItem = pop(queue);
+            addNeighbours(queue, curItem.x, curItem.y);
         }
         System.out.println("cnt1 " + cnt1 + " reprocess " + reprocess + " time " + (System.currentTimeMillis() - s));
+
+    }
+    
+    
+    public boolean findPath(Pose start, Pose target)
+    {
+        buildCostMap();
+        int x = (int)(start.getX()*scaleX);
+        int y = (int)(start.getY()*scaleY);
+        if (costMap[y*mapWidth + x] >= EXPANDED)
+            return false;
+        x = (int)(target.getX()*scaleX);
+        y = (int)(target.getY()*scaleY);
+        if (costMap[y*mapWidth + x] >= EXPANDED)
+            return false;
+        costs = new int[mapWidth][mapHeight];
+        CompareState stateCompare = new CompareState();
+        PriorityQueue<State> queue = new PriorityQueue<State>(100, stateCompare);
+        addTarget(queue, x, y);
+        search(queue);
+        return true;
+    }
+
+    public boolean explore(Pose start)
+    {
+        buildCostMap();
+        int x = (int)(start.getX()*scaleX);
+        int y = (int)(start.getY()*scaleY);
+        if (costMap[y*mapWidth + x] >= EXPANDED)
+            return false;
+        costs = new int[mapWidth][mapHeight];
+        CompareState stateCompare = new CompareState();
+        PriorityQueue<State> queue = new PriorityQueue<State>(100, stateCompare);
+        if (findFrontiers(queue) == 0) return false;
+        search(queue);
+        if (costs[x][y] == 0) return false;
         return true;
     }
 
@@ -481,35 +549,13 @@ public class GradientPlanner
             }
             //System.out.printf("best index %d\n", bestIndex);
             return new Pose((float)((x+offsetX[bestIndex])/scaleX), (float)((y+offsetY[bestIndex])/scaleY), headings[bestIndex]);
-            /*
-            double bestCost = 0;
-            int x = (int)(p.getX()*scaleX);
-            int y = (int)(p.getY()*scaleY);
-            int bestX=0;
-            int bestY=0;
-            if (costs == null || costs[x][y] == GOAL)
-                return null;
-            for(int i = 0; i < offsetX.length; i++)
-            {
-                if (costs[x + offsetX[i]][y+offsetY[i]] >= bestCost)
-                {
-                    bestX = x + offsetX[i];
-                    bestY = y+offsetY[i];
-                    bestCost = costs[x + offsetX[i]][y+offsetY[i]];
-                }
-            }
-            //System.out.println("loc x " + bestX + " y " + bestY + " cost " + bestCost + " c2 " + costMap[bestX][bestY]);
-            return new Pose((float)(bestX/scaleX), (float)(bestY/scaleY), 0);
-            */
         }
     }
     
     protected List<Pose> getPath(Pose from)
     {
-        System.out.println("GPS");
         List<Pose> p = new ArrayList<Pose>();
         Pose next = nextPose(from);
-        if (next == null) System.out.println("null");
         if (next == null)
             return p;
         p.add(from);
@@ -518,7 +564,6 @@ public class GradientPlanner
             p.add(next);
             next = nextPose(next);
         }
-        System.out.println("GPF");
         return p;        
     }
 

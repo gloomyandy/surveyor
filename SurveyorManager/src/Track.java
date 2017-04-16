@@ -148,10 +148,21 @@ public class Track
         protected void setTarget(RobotInfo.PlanState state)
         {
             Point pos = map.getTargetPosition();
-            if (pos == null || state == RobotInfo.PlanState.NONE)
-                robot.setTargetPose(null, RobotInfo.PlanState.NONE);
-            else 
-                robot.setTargetPose(new Pose((float)pos.getX(), (float)pos.getY(), (float)0.0), state);
+            switch(state)
+            {
+            case PLAN:
+            case DIRECT:
+                if (pos == null)
+                    robot.setTargetPose(null, RobotInfo.PlanState.NONE);
+                else
+                    robot.setTargetPose(new Pose((float)pos.getX(), (float)pos.getY(), (float)0.0), state);                    
+                break;
+            case EXPLORE:
+            case HOME:
+            case NONE:
+                robot.setTargetPose(null, state);
+                break;
+            }
             map.clearTargetPosition();
         }
         
@@ -180,8 +191,8 @@ public class Track
                 }
             }
         });
-        RobotInfo.loadHistory(window, "/home/andy/slam/BreezySLAM-master/examples/log16.dat");
-        //RobotInfo.loadHistory(window, "/home/andy/Lego/ev3/eclipsews/Surveyor/bin/log.dat");
+        RobotInfo.loadHistory(window, "/home/andy/slam/BreezySLAM-master/examples/log18.dat");
+        //RobotInfo.loadHistory(window, "/home/andy/git/surveyor/Surveyor/bin/log.dat");
         RobotInfo.waitForRobots(window);
     }
 
@@ -468,7 +479,7 @@ public class Track
         slider_1.setMajorTickSpacing(90);
         slider_1.setPaintTicks(true);
         slider_1.setPaintLabels(true);
-        panel_1.add(slider_1, "flowy,cell 0 2,grow");
+        //panel_1.add(slider_1, "flowy,cell 0 2,grow");
         //panel_1.add(slider_1, "cell 0 2");          
         slider_2 = new JSlider();
         slider_2.setMaximum(50);
@@ -502,14 +513,27 @@ public class Track
             }
         });
         panel_1.add(planTarget, "flowy,cell 0 5,grow");
+        JButton explore = new JButton("Explore");
+        explore.addActionListener(new ActionListener() {
+            public void actionPerformed(ActionEvent e) {
+                view.setTarget(RobotInfo.PlanState.EXPLORE);
+            }
+        });
+        panel_1.add(explore, "flowy,cell 0 6,grow");
+        JButton home = new JButton("Home");
+        home.addActionListener(new ActionListener() {
+            public void actionPerformed(ActionEvent e) {
+                view.setTarget(RobotInfo.PlanState.HOME);
+            }
+        });
+        panel_1.add(home, "flowy,cell 0 6,grow");
         JButton clearTarget = new JButton("Clear target");
         clearTarget.addActionListener(new ActionListener() {
             public void actionPerformed(ActionEvent e) {
                 view.setTarget(RobotInfo.PlanState.NONE);
             }
         });
-        panel_1.add(clearTarget, "flowy,cell 0 6,grow");
-        //panel_1.add(target, "cell 0 4");  
+        panel_1.add(clearTarget, "flowy,cell 0 7,grow");
         view = new TrackInfoView(panel_1, table_1, display);
 
     }
