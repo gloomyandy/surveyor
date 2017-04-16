@@ -433,50 +433,52 @@ public class GradientPlanner
     {
         long s = System.currentTimeMillis();
         List<Point> targets = new ArrayList<Point>();
-        int cnt = 0;
-        for(int x10 = 0; x10 < mapWidth; x10 += 10)
-            for(int y10 = 0; y10 < mapHeight; y10 += 10)
+        boolean[][] isTarget = new boolean[mapWidth/10][mapHeight/10];
+        int xMin = Integer.MAX_VALUE;
+        int xMax = Integer.MIN_VALUE;
+        int yMin = Integer.MAX_VALUE;
+        int yMax = Integer.MIN_VALUE;
+        int cnt1 = 0;
+        int cnt2 = 0;
+        for(int x10 = 0; x10 < mapWidth-10; x10 += 10)
+            for(int y10 = 0; y10 < mapHeight-10; y10 += 10)
             {
                 int cost = 0;
                 for(int x1 = x10; x1 < x10+10; x1++)
                     for(int y1 = y10; y1 < y10+10; y1++)
                     {
                         if (outOfMap(x1, y1) || ((int)costMap[y1*mapWidth + x1] & 0xff) >= EXPANDED)
-                            cost = - Integer.MIN_VALUE;
+                            cost =  Integer.MIN_VALUE;
                         else
                             cost += (int)map[y1*mapWidth + x1] & 0xff;                        
                     }
+                int x = x10/10;
+                int y = y10/10;
                 if (cost > 12000 && cost < 16500)
                 {
-                    int x = x10 + 5;
-                    int y = y10 + 5;
-                    if (((int)costMap[x*mapWidth + x] & 0xff) < EXPANDED)
-                    {
-                        addTarget(queue, x, y);
-                        costMap[y*mapWidth + x] = (byte) FRONTIER;
-                        cnt++;
-                    }
-
-                    //targets.add(new Point((int)((x10+5)/scaleX), (int)((y10+5)/scaleY)));
+                    isTarget[x][y] = true;
+                    cnt1++;
+                }
+                else
+                {
+                    if (x < xMin) xMin = x;
+                    if (x > xMax) xMax = x;
+                    if (y < yMin) yMin = y;
+                    if (y > yMax) yMax = y;
                 }
             }
-        /*
-        frontiers = targets;
-        for(Point p : frontiers)
-        {
-            int x = (int)(p.x*scaleX);
-            int y = (int)(p.y*scaleY);
-            if (((int)costMap[y*mapWidth + x] & 0xff) < EXPANDED)
-            {
-                addTarget(queue, x, y);
-                costMap[y*mapWidth + x] = (byte) FRONTIER;
-            }
-        }
-        System.out.println("Targets " + frontiers.size());
-        return frontiers.size();
-        */
-        System.out.println("Targets " + cnt + " time " + (System.currentTimeMillis() - s));
-        return cnt;
+        for (int x = xMin-1; x <= xMax+1; x++)
+            for(int y = yMin-1; y <= yMax+1; y++)
+                if (isTarget[x][y])
+                {
+                    int x10 = x*10 + 5;
+                    int y10 = y*10 + 5;
+                    addTarget(queue, x10, y10);
+                    costMap[y10*mapWidth + x10] = (byte) FRONTIER;
+                    cnt2++;
+                }
+        System.out.println("Targets " + cnt2 + "/" + cnt1 + " time " + (System.currentTimeMillis() - s));
+        return cnt2;
        
     }
     
