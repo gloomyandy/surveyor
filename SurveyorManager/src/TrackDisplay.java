@@ -239,9 +239,10 @@ public class TrackDisplay extends ZoomAndPanPanel
             gTrack.drawLine((int)target.getX() - width/2, (int)target.getY()-width/2, (int)target.getX() + width/2, (int)target.getY()+width/2);
             gTrack.drawLine((int)target.getX() - width/2, (int)target.getY()+width/2, (int)target.getX() + width/2, (int)target.getY()-width/2);
         }
-        if (frontiers != null)
-            for(Point p : frontiers)
-                gTrack.drawArc((int)p.x - width/2, (int)p.y-width/2, width, width, 0, 360);
+        //if (frontiers != null)
+            //for(Point p : frontiers)
+                //gTrack.drawRect((int)p.x - width/2, (int)p.y-width/2, width, width);
+                //gTrack.drawArc((int)p.x - width/2, (int)p.y-width/2, width, width, 0, 360);
         if (path != null && !path.isEmpty())
         {
             Pose prev = path.get(0);

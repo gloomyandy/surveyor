@@ -429,6 +429,57 @@ public class GradientPlanner
         return frontiers.size();
     }
     
+    protected int findAreasToExplore(PriorityQueue<State> queue)
+    {
+        long s = System.currentTimeMillis();
+        List<Point> targets = new ArrayList<Point>();
+        int cnt = 0;
+        for(int x10 = 0; x10 < mapWidth; x10 += 10)
+            for(int y10 = 0; y10 < mapHeight; y10 += 10)
+            {
+                int cost = 0;
+                for(int x1 = x10; x1 < x10+10; x1++)
+                    for(int y1 = y10; y1 < y10+10; y1++)
+                    {
+                        if (outOfMap(x1, y1) || ((int)costMap[y1*mapWidth + x1] & 0xff) >= EXPANDED)
+                            cost = - Integer.MIN_VALUE;
+                        else
+                            cost += (int)map[y1*mapWidth + x1] & 0xff;                        
+                    }
+                if (cost > 12000 && cost < 16500)
+                {
+                    int x = x10 + 5;
+                    int y = y10 + 5;
+                    if (((int)costMap[x*mapWidth + x] & 0xff) < EXPANDED)
+                    {
+                        addTarget(queue, x, y);
+                        costMap[y*mapWidth + x] = (byte) FRONTIER;
+                        cnt++;
+                    }
+
+                    //targets.add(new Point((int)((x10+5)/scaleX), (int)((y10+5)/scaleY)));
+                }
+            }
+        /*
+        frontiers = targets;
+        for(Point p : frontiers)
+        {
+            int x = (int)(p.x*scaleX);
+            int y = (int)(p.y*scaleY);
+            if (((int)costMap[y*mapWidth + x] & 0xff) < EXPANDED)
+            {
+                addTarget(queue, x, y);
+                costMap[y*mapWidth + x] = (byte) FRONTIER;
+            }
+        }
+        System.out.println("Targets " + frontiers.size());
+        return frontiers.size();
+        */
+        System.out.println("Targets " + cnt + " time " + (System.currentTimeMillis() - s));
+        return cnt;
+       
+    }
+    
     protected void addNeighbours(PriorityQueue<State> queue, int x, int y)
     {
         int parentCost = costs[x][y];
@@ -518,7 +569,8 @@ public class GradientPlanner
         costs = new int[mapWidth][mapHeight];
         CompareState stateCompare = new CompareState();
         PriorityQueue<State> queue = new PriorityQueue<State>(100, stateCompare);
-        if (findFrontiers(queue) == 0) return false;
+        //if (findFrontiers(queue) == 0) return false;
+        if (findAreasToExplore(queue) == 0) return false;
         search(queue);
         if (costs[x][y] == 0) return false;
         return true;
