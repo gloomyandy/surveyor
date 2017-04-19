@@ -364,6 +364,7 @@ static long totalTime = 0;
                     }
             }
             long t = System.currentTimeMillis();
+            //if (processedScans > 375) slam.map_quality = 1;
             ScanInfo info = scanHistory.get(processedScans);
             slam.update(info.rawScan, info.velocity);
             Position p = slam.getpos();

@@ -191,7 +191,7 @@ public class Track
                 }
             }
         });
-        //RobotInfo.loadHistory(window, "/home/andy/slam/BreezySLAM-master/examples/log18.dat");
+        //RobotInfo.loadHistory(window, "/home/andy/slam/BreezySLAM-master/examples/log19.dat");
         RobotInfo.loadHistory(window, "/home/andy/git/surveyor/Surveyor/bin/log.dat");
         RobotInfo.waitForRobots(window);
     }
