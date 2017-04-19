@@ -40,6 +40,7 @@ JNIEXPORT jobject JNICALL Java_edu_wlu_cs_levy_breezyslam_algorithms_RMHCSLAM_po
         jint max_search_iter)
 {
     position_t startpos;
+    int distance=0;
 
     startpos.x_mm          = get_double_field(env, startpos_object, "x_mm");
     startpos.y_mm          = get_double_field(env, startpos_object, "y_mm");
@@ -55,13 +56,14 @@ JNIEXPORT jobject JNICALL Java_edu_wlu_cs_levy_breezyslam_algorithms_RMHCSLAM_po
             sigma_xy_mm,
             sigma_theta_degrees,
             max_search_iter, 
-            random);
+            random, 
+            &distance);
 
     jclass cls = (*env)->FindClass(env, "edu/wlu/cs/levy/breezyslam/components/Position");
 
     jmethodID constructor = (*env)->GetMethodID(env, cls, "<init>", "(DDD)V");
 
     jobject newpos_object = (*env)->NewObject(env, cls, constructor, newpos.x_mm, newpos.y_mm, newpos.theta_degrees);
-
+    set_int_field(env, thisobject, "distance", distance);
     return newpos_object;
 } 

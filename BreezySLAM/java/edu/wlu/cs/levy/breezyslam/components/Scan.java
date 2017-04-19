@@ -93,5 +93,17 @@ public class Scan
     {
         this.update(scanvals_mm, hole_width_millimeters, velocities.dxy_mm, velocities.dtheta_degrees);
     }
+
+    public native int getobstcnt();
+    private native int getcnt();
+    private native void getpoints(double[] points);
+
+    public double[] getPoints()
+    {
+        int len = getcnt();
+        double[] points = new double[len*2];
+        getpoints(points);
+        return points;
+    }
 }
 

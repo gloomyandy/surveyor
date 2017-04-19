@@ -79,9 +79,11 @@ public abstract class WheeledRobot
             double left_diff_degrees = odometry.left_wheel_degrees - this.left_wheel_degrees_prev;
             double right_diff_degrees = odometry.right_wheel_degrees - this.right_wheel_degrees_prev;
 
-            dxy_mm =  this.wheel_radius_mm * (java.lang.Math.toRadians(left_diff_degrees) + java.lang.Math.toRadians(right_diff_degrees));
+            //dxy_mm =  this.wheel_radius_mm * (java.lang.Math.toRadians(left_diff_degrees) + java.lang.Math.toRadians(right_diff_degrees));
+            dxy_mm =  (2.0*this.wheel_radius_mm*Math.PI)/360 * (left_diff_degrees + right_diff_degrees)/2.0;
 
-            dtheta_degrees = this.wheel_radius_mm / this.half_axle_length_mm * (right_diff_degrees - left_diff_degrees);
+            //dtheta_degrees = this.wheel_radius_mm / this.half_axle_length_mm * (right_diff_degrees - left_diff_degrees);
+            dtheta_degrees = (2*Math.PI*this.wheel_radius_mm)/360 * ((right_diff_degrees - left_diff_degrees)/(2*this.half_axle_length_mm))*(180/Math.PI);
 
             dt_seconds = odometry.timestamp_seconds - this.timestamp_seconds_prev;
         }

@@ -79,6 +79,11 @@ JNIEXPORT void JNICALL Java_edu_wlu_cs_levy_breezyslam_components_Map_update (JN
     map_update(map, scan, position, quality, hole_width_mm);
 }
 
+JNIEXPORT void JNICALL Java_edu_wlu_cs_levy_breezyslam_components_Map_reset (JNIEnv *env, jobject thisobject, jint size_pixels, jdouble size_meters)
+{
+    map_t * map = cmap_from_jmap(env, thisobject);
+    map_init(map, (int)size_pixels, (double)size_meters);
+}
 
 // Scan methods -----------------------------------------------------------------------------------------
 
@@ -130,3 +135,34 @@ JNIEXPORT void JNICALL Java_edu_wlu_cs_levy_breezyslam_components_Scan_update (J
 
     (*env)->ReleaseIntArrayElements(env, lidar_mm, lidar_mm_c, 0);
 }
+
+
+JNIEXPORT jint JNICALL Java_edu_wlu_cs_levy_breezyslam_components_Scan_getcnt
+  (JNIEnv * env, jobject thisobject)
+{
+    scan_t * scan = cscan_from_jscan(env, thisobject);
+    return (jint) scan->npoints;
+}
+
+JNIEXPORT jint JNICALL Java_edu_wlu_cs_levy_breezyslam_components_Scan_getobstcnt
+  (JNIEnv * env, jobject thisobject)
+{
+    scan_t * scan = cscan_from_jscan(env, thisobject);
+    return (jint) scan->obst_npoints;
+}
+
+
+JNIEXPORT void JNICALL Java_edu_wlu_cs_levy_breezyslam_components_Scan_getpoints
+  (JNIEnv *env, jobject thisobject, jdoubleArray points)
+{
+    scan_t * scan = cscan_from_jscan(env, thisobject);
+    jdouble * points_c = (*env)->GetDoubleArrayElements(env, points, 0);
+    int i;
+    for(i=0; i < scan->npoints; i++)
+    {
+        points_c[i*2] = scan->x_mm[i];
+        points_c[i*2+1] = scan->y_mm[i];
+    }
+    (*env)->ReleaseDoubleArrayElements(env, points, points_c, 0);
+}
+

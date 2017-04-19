@@ -54,6 +54,7 @@ public class Position
         this.x_mm = x_mm;
         this.y_mm = y_mm;
         this.theta_degrees = theta_degrees;
+        normalize();
     }
 
     /**
@@ -66,6 +67,25 @@ public class Position
         this.x_mm = position.x_mm;
         this.y_mm = position.y_mm;
         this.theta_degrees = position.theta_degrees;
+    }
+
+    public void normalize()
+    {
+        while(theta_degrees > 180) theta_degrees -= 360;
+        while(theta_degrees < -180) theta_degrees += 360;
+    }
+
+    public void move(Position delta)
+    {
+        this.x_mm += delta.x_mm;
+        this.y_mm += delta.y_mm;
+        this.theta_degrees += delta.theta_degrees;
+        normalize();
+    }
+
+    public Position delta(Position p2)
+    {
+        return new Position(p2.x_mm - this.x_mm, p2.y_mm - this.y_mm, p2.theta_degrees - this.theta_degrees);
     }
 
     /**

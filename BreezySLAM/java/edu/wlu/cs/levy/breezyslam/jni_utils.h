@@ -61,4 +61,7 @@ static double get_double_field(JNIEnv *env, jobject object, const char * fieldna
     return (*env)->GetDoubleField (env, object, get_fid(env, object, fieldname, "D"));
 }
 
-
+static void set_int_field(JNIEnv *env, jobject object, const char * fieldname, int val)
+{
+    (*env)->SetIntField (env, object, get_fid(env, object, fieldname, "I"), val);
+}

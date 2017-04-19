@@ -53,12 +53,15 @@ public abstract class CoreSLAM {
     /**
     * The quality of the map (0 through 255)
     */
-    public int map_quality = 50; 
+    //public int map_quality = 50; 
+    public int map_quality = 10; 
 
     /**
     * The width in millimeters of each "hole" in the map (essentially, wall width)
     */
-    public double hole_width_mm = 600;
+    //public double hole_width_mm = 600;
+    //public double hole_width_mm = 300;
+    public double hole_width_mm = 200;
 
     protected Laser laser;
 
@@ -66,8 +69,10 @@ public abstract class CoreSLAM {
 
     protected Map map;
 
-    protected Scan scan_for_mapbuild;
-    protected Scan scan_for_distance;
+    //protected Scan scan_for_mapbuild;
+    //protected Scan scan_for_distance;
+    public Scan scan_for_mapbuild;
+    public Scan scan_for_distance;
 
     public CoreSLAM(Laser laser, int map_size_pixels, double map_size_meters)
     {
@@ -78,7 +83,8 @@ public abstract class CoreSLAM {
         this.velocities = new Velocities();
 
         // Initialize a scan for computing distance to map, and one for updating map
-        this.scan_for_mapbuild = this.scan_create(3);
+        //this.scan_for_mapbuild = this.scan_create(3);
+        this.scan_for_mapbuild = this.scan_create(1);
         this.scan_for_distance = this.scan_create(1);
         
         // Initialize the map 
@@ -98,12 +104,13 @@ public abstract class CoreSLAM {
 
     public void update(int [] scan_mm, Velocities velocities)
     {             
+        this.velocities.update(velocities.getDxyMm(), velocities.getDthetaDegrees(),  velocities.getDtSeconds());
         // Build a scan for computing distance to map, and one for updating map
         this.scan_update(this.scan_for_mapbuild, scan_mm);
         this.scan_update(this.scan_for_distance, scan_mm);
         
         // Update velocities
-        this.velocities.update(velocities.getDxyMm(), velocities.getDthetaDegrees(),  velocities.getDtSeconds());
+        //this.velocities.update(velocities.getDxyMm(), velocities.getDthetaDegrees(),  velocities.getDtSeconds());
                                  
         // Implementing class updates map and pointcloud
         this.updateMapAndPointcloud(velocities);

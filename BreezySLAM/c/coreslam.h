@@ -161,7 +161,8 @@ rmhc_position_search(
 	double sigma_xy_mm,
 	double sigma_theta_degrees,
 	int max_search_iter,
-	void * randomizer);
+	void * randomizer,
+        int * distance);
 
 #ifdef __cplusplus 
 }

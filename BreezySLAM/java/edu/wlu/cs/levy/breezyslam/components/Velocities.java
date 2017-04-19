@@ -21,7 +21,7 @@
 */
 
 package edu.wlu.cs.levy.breezyslam.components;
-
+import edu.wlu.cs.levy.breezyslam.components.Position;
 /**
 * A class representing the forward and angular velocities of a robot as determined by odometry.
 */
@@ -38,6 +38,12 @@ public class Velocities
         this.dt_seconds = dtSeconds;
     }
 
+    public Velocities(Position pos, double dtSeconds)
+    {
+        this(Math.sqrt(pos.x_mm*pos.x_mm + pos.y_mm*pos.y_mm), pos.theta_degrees, dtSeconds);
+        dpos = new Position(pos);
+    }
+
     /**
     * Creates a new Velocities object with zero velocities.
     */
@@ -46,6 +52,7 @@ public class Velocities
         this.dxy_mm = 0;
         this.dtheta_degrees = 0;
         this.dt_seconds = 0;
+        dpos = new Position(0.0, 0.0, 0.0);
     }
 
     /**
@@ -96,6 +103,11 @@ public class Velocities
         return this.dt_seconds;
     }
 
+    public Position getDeltaPosition()
+    {
+        return dpos;
+    }
+
     /**
       * Forward component of velocity, in mm to be divided by time in seconds.
       */
@@ -111,4 +123,6 @@ public class Velocities
       *  Time in seconds between successive velocity measurements.
       */
      protected double dt_seconds;
+
+     protected Position dpos;
 }

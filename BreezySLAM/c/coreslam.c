@@ -86,7 +86,7 @@ static int roundup(double x)
 static int
         out_of_bounds(int value, int bound)
 {
-    return value  < 0 || value >= bound;
+    return value  <= 0 || value >= bound-1;
 }
 
 
@@ -95,24 +95,24 @@ static int
         clip(int *xyc, int * yxc, int xy, int yx, int map_size)
 {
     
-    if (*xyc < 0)
+    if (*xyc <= 0)
     {
         if (*xyc == xy)
         {
             return 1;
         }
-        *yxc += (*yxc - yx) * (- *xyc) / (*xyc - xy);
-        *xyc = 0;
+        *yxc += (*yxc - yx) * (1 - *xyc) / (*xyc - xy);
+        *xyc = 1;
     }
     
-    if (*xyc >= map_size)
+    if (*xyc >= map_size-1)
     {
         if (*xyc == xy)
         {
             return 1;
         }
-        *yxc += (*yxc - yx) * (map_size - 1 - *xyc) / (*xyc - xy);
-        *xyc = map_size - 1;
+        *yxc += (*yxc - yx) * (map_size - 2 - *xyc) / (*xyc - xy);
+        *xyc = map_size - 2;
     }
     
     return 0;
@@ -184,12 +184,28 @@ static void
             
             pixel_t * ptr = map_pixels + y1 * map_size + x1;
             int pixval = NO_OBSTACLE;
-            
+           
+            int endx = dx - 2 * derrorv;
             int x = 0;
-            for (x = 0; x <= dxc; x++, ptr += incptrx)
+            if (dxc < endx) endx = dxc;
+            for (x = 0; x <= endx; x++, ptr += incptrx)
             {
-                if (x > dx - 2 * derrorv)
+                /* Integration into the map */
+                *ptr = ((256 - alpha) * (*ptr) + alpha * pixval) >> 8;
+                
+                if (error > 0)
                 {
+                    ptr += incptry;
+                    error += diago;
+                } else
+                {
+                    error += horiz;
+                }
+            }
+            pixel_t * ptr2=ptr - incptry;
+            pixel_t * ptr3=ptr + incptry;
+            for (; x <= dxc; x++, ptr += incptrx, ptr2 += incptrx, ptr3 += incptrx)
+            {
                     if (x <= dx - derrorv)
                     {
                         pixval += incv;
@@ -210,9 +226,58 @@ static void
                             errorv += derrorv;
                         }
                     }
-                }
-                
                 /* Integration into the map */
+                    int val = alpha*pixval;
+                *ptr = ((256 - alpha) * (*ptr) + val) >> 8;
+                    val /= 2;
+                    *ptr2 = ((256 - alpha) * (*ptr2) + val) >> 8;
+                    *ptr3 = ((256 - alpha) * (*ptr3) + val) >> 8;
+                
+                if (error > 0)
+                {
+                    ptr += incptry;
+                    ptr2 += incptry;
+                    ptr3 += incptry;
+                    error += diago;
+                } else
+                {
+                    error += horiz;
+                }
+            }
+/*
+            for (x = 0; x <= dxc; x++, ptr += incptrx)
+            {
+                if (x > dx - 2 * derrorv)
+                {
+                    pixel_t * ptr2;
+                    if (x <= dx - derrorv)
+                    {
+                        pixval += incv;
+                        errorv += incerrorv;
+                        if (errorv > derrorv)
+                        {
+                            pixval += sincv;
+                            errorv -= derrorv;
+                        }
+                    }
+                    else
+                    {
+                        pixval -= incv;
+                        errorv -= incerrorv;
+                        if (errorv < 0)
+                        {
+                            pixval -= sincv;
+                            errorv += derrorv;
+                        }
+                    }
+                    ptr2 = ptr - incptry;
+                    *ptr2 = ((256 - alpha) * (*ptr2) + alpha * pixval/2) >> 8;
+                    ptr2 = ptr + incptry;
+                    *ptr2 = ((256 - alpha) * (*ptr2) + alpha * pixval/2) >> 8;
+                }
+               */ 
+                /* Integration into the map */
+/*
                 *ptr = ((256 - alpha) * (*ptr) + alpha * pixval) >> 8;
                 
                 if (error > 0)
@@ -224,6 +289,7 @@ static void
                     error += horiz;
                 }
             }
+*/
         }
     }
 }
@@ -239,14 +305,16 @@ static void
         double rotation)
 {
     int j;
+    //printf("offset %d span %d\n", offset, scan->span); 
     for (j=0; j<scan->span; ++j)
     {
         double k = (double)(offset*scan->span+j) * scan->detection_angle_degrees / (scan->size * scan->span - 1);
-        double angle = radians(-scan->detection_angle_degrees/2 + k * rotation);
+        double angle = radians(scan->detection_angle_degrees/2 - k * rotation);
         double x = distance * cos(angle) - k * horz_mm;
         double y = distance * sin(angle);
-        
         scan->value[scan->npoints] = scanval;
+//if (offset < 5 || offset > 355)
+//printf("off %d k %f correction %f x %f distance %d\n", offset, k, (k*horz_mm), x, distance);
         
         scan->x_mm[scan->npoints] = x;
         scan->y_mm[scan->npoints] = y;
@@ -440,21 +508,25 @@ scan_update(
     int degrees_per_second = (int)(scan->rate_hz * 360);
     double horz_mm = velocities_dxy_mm / degrees_per_second;
     double rotation = 1 + velocities_dtheta_degrees / degrees_per_second;
-    
     /* Span the laser scans to better cover the space */
     int i = 0;
     
     scan->npoints = 0;
     scan->obst_npoints = 0;
-    
-    for (i=scan->detection_margin+1; i<scan->size-scan->detection_margin; ++i)
+    //printf("horz_mm %f rotation %f dps %d\n", horz_mm, rotation, degrees_per_second);
+    //for (i=scan->detection_margin+1; i<scan->size-scan->detection_margin; ++i)
+    for (i=scan->detection_margin; i<scan->size-scan->detection_margin; ++i)
     {
-        int lidar_value_mm = lidar_mm[i];
+        int lidar_value_mm = lidar_mm[scan->size - i - 1];
         
         /* No obstacle */
         if (lidar_value_mm == 0)
         {
-            scan_update_xy(scan, i, (int)scan->distance_no_detection_mm, NO_OBSTACLE, horz_mm, rotation);
+            //scan_update_xy(scan, i, (int)scan->distance_no_detection_mm, NO_OBSTACLE, horz_mm, rotation);
+        }
+        if (lidar_value_mm > 10000)
+        {
+            scan_update_xy(scan, i, (int)lidar_value_mm, NO_OBSTACLE, horz_mm, rotation);
         }
         
         /* Obstacle */
@@ -488,7 +560,8 @@ position_t
         double sigma_xy_mm,
         double sigma_theta_degrees,
         int max_search_iter,
-        void * randomizer)
+        void * randomizer,
+        int *distance)
 {
     position_t currentpos = start_pos;
     position_t bestpos = start_pos;
@@ -535,6 +608,6 @@ position_t
         }
         
     }
-    
+    *distance = lowest_distance;
     return bestpos;
 }

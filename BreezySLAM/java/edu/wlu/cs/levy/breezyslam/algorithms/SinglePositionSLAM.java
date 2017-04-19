@@ -40,6 +40,12 @@ public abstract class SinglePositionSLAM extends CoreSLAM
         return this.position;
     }
 
+    public void reset()
+    {
+        this.position = new Position(250.0*this.map.sizeMeters(), this.init_coord_mm(), 0);
+        map.reset();
+    }
+
     /**
     * Creates a SinglePositionSLAM object.
     * @param laser a Laser object containing parameters for your Lidar equipment
@@ -51,7 +57,8 @@ public abstract class SinglePositionSLAM extends CoreSLAM
     {
         super(laser, map_size_pixels, map_size_meters);
 
-        this.position = new Position(this.init_coord_mm(), this.init_coord_mm(), 0);
+        //this.position = new Position(this.init_coord_mm(), this.init_coord_mm(), 0);
+        reset();
     }
     
     
@@ -63,7 +70,7 @@ public abstract class SinglePositionSLAM extends CoreSLAM
     {
         // Start at current position 
         Position start_pos = new Position(this.position);
-
+/*
         // Add effect of velocities
         start_pos.x_mm      += velocities.getDxyMm() * this.costheta();
         start_pos.y_mm      += velocities.getDxyMm() *  this.sintheta();
@@ -72,6 +79,17 @@ public abstract class SinglePositionSLAM extends CoreSLAM
         // Add offset from laser
         start_pos.x_mm += this.laser.getOffsetMm() * this.costheta();
         start_pos.y_mm += this.laser.getOffsetMm() * this.sintheta();
+*/
+        // Add effect of velocities
+        start_pos.theta_degrees += velocities.getDthetaDegrees();
+double costheta = Math.cos(Math.toRadians(start_pos.theta_degrees));
+double sintheta = Math.sin(Math.toRadians(start_pos.theta_degrees));
+        start_pos.x_mm      += velocities.getDxyMm() * costheta;
+        start_pos.y_mm      += velocities.getDxyMm() *  sintheta;
+        
+        // Add offset from laser
+        start_pos.x_mm += this.laser.getOffsetMm() * costheta;
+        start_pos.y_mm += this.laser.getOffsetMm() * sintheta;
         
         // Get new position from implementing class
         Position new_position = this.getNewPosition(start_pos);
@@ -83,6 +101,20 @@ public abstract class SinglePositionSLAM extends CoreSLAM
         this.position = new Position(new_position);
         this.position.x_mm -= this.laser.getOffsetMm() * this.costheta();
         this.position.y_mm -= this.laser.getOffsetMm() * this.sintheta(); 
+/*
+        //this.position.x_mm -= this.laser.getOffsetMm() * this.costheta();
+        //this.position.y_mm -= this.laser.getOffsetMm() * this.sintheta(); 
+        this.position.theta_degrees += velocities.getDthetaDegrees();
+        double radtheta = Math.toRadians((this.position.theta_degrees + new_position.theta_degrees)/2);
+        this.position.x_mm -= this.laser.getOffsetMm() * this.costheta();
+        this.position.y_mm -= this.laser.getOffsetMm() * this.sintheta(); 
+        double costheta = Math.cos(radtheta);
+        double sintheta = Math.sin(radtheta);
+        //this.position.x_mm      += velocities.getDxyMm() * this.costheta();
+        //this.position.y_mm      += velocities.getDxyMm() *  this.sintheta();
+        this.position.x_mm      += velocities.getDxyMm() * costheta;
+        this.position.y_mm      += velocities.getDxyMm() * sintheta;
+*/
     } 
 
     /**
@@ -94,6 +126,12 @@ public abstract class SinglePositionSLAM extends CoreSLAM
     protected abstract Position getNewPosition(Position start_pos);    
     
     private Position position;
+    private int distance = 0;
+
+    public int getDistance()
+    {
+        return distance;
+    }
        
     private double theta_radians()
     {

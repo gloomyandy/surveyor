@@ -35,6 +35,7 @@ public class Map
 	private native void init(int size_pixels, double size_meters);
 
     private double size_meters;
+    private int size_pixels;
 
     private native void update(
             Scan scan, 
@@ -63,6 +64,7 @@ public class Map
 
         // for public accessor
         this.size_meters = size_meters;
+        this.size_pixels = size_pixels;
     }
 
     /**
@@ -93,4 +95,10 @@ public class Map
         return this.size_meters;
     }
 
+    private native void reset(int size_pixels, double size_meters);
+
+    public void reset()
+    {
+        reset(size_pixels, size_meters);
+    }
 }
