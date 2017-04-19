@@ -4,6 +4,6 @@
 	<classpathentry kind="con" path="org.eclipse.jdt.launching.JRE_CONTAINER/org.eclipse.jdt.internal.debug.ui.launcher.StandardVMType/JavaSE-1.7"/>
 	<classpathentry kind="lib" path="miglayout15-swing.jar" sourcepath="miglayout-src.zip"/>
 	<classpathentry combineaccessrules="false" kind="src" path="/ev3classes"/>
-	<classpathentry kind="lib" path="/home/andy/slam/BreezySLAM-master/java"/>
+	<classpathentry kind="lib" path="/home/andy/git/surveyor/BreezySLAM/java"/>
 	<classpathentry kind="output" path="bin"/>
 </classpath>
