@@ -16,7 +16,7 @@ public class LineFollower implements Runnable
     protected FollowState state = FollowState.STOPPED;
     protected Thread thread;
     //protected static final float MAX_STEER = 125.0f;
-    protected static final float MAX_STEER = 8.0f;
+    protected static final float MAX_STEER = 10.0f;
     protected static final long LOOP_TIME = 100;
     protected float curSpeed = 0.0f;
     protected float targetSpeed = curSpeed;
