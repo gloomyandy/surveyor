@@ -59,7 +59,8 @@ distance_scan_to_map(
             /* Add point if in map bounds */
             if (x >= 0 && x < map->size_pixels && y >= 0 && y < map->size_pixels) 
             {
-                sum += map->pixels[y * map->size_pixels + x];
+              //sum += map->pixels[y * map->size_pixels + x];
+              sum += map->gpixels[y * map->size_pixels + x];
                 npoints++;
             } 
         }

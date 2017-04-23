@@ -49,6 +49,7 @@ typedef struct map_t {
     double size_meters;
     
     double scale_pixels_per_mm;
+    pixel_t * gpixels;
     
 } map_t;
 

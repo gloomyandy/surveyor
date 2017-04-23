@@ -40,6 +40,13 @@
 #include "coreslam_internals.h"
 
 #include "random.h"
+static int distance1X[] = {-1, -1, 0, 1};
+static int distance1Y[] = {0, -1, -1, -1};
+static int distance2X[] = {0, -1, 1, 1};
+static int distance2Y[] = {1, 1, 0, 1};
+#define FIX_SCALE 256
+#define HV_DIST 1*FIX_SCALE
+#define DIAG_DIST (int)(1.4142*FIX_SCALE)
 
 /* Local helpers--------------------------------------------------- */
 
@@ -227,9 +234,11 @@ static void
                         }
                     }
                 /* Integration into the map */
-                    int val = alpha*pixval;
+                    //int val = alpha*pixval;
+                    int val = alpha*OBSTACLE;
                 *ptr = ((256 - alpha) * (*ptr) + val) >> 8;
-                    val /= 2;
+                //val /= 2;
+                //val /= 2;
                     *ptr2 = ((256 - alpha) * (*ptr2) + val) >> 8;
                     *ptr3 = ((256 - alpha) * (*ptr3) + val) >> 8;
                 
@@ -294,6 +303,43 @@ static void
     }
 }
 
+static void
+        update_gradient_map(
+        pixel_t * map_pixels,
+        pixel_t * gmap_pixels,
+        int map_size,
+        int step)
+{
+    int x, y;
+    for(y = 1; y < map_size-1; y++)
+        for(x = 1; x < map_size-1; x++)
+        {
+            int val = map_pixels[y*map_size + x];
+            int i;
+            for(i=0; i < 4; i++)
+            {
+                int val2 = gmap_pixels[(y+distance1Y[i])*map_size + (x + distance1X[i])] + step*(i % 2 == 1 ? DIAG_DIST : HV_DIST);
+                if (val2 < val)
+                  val = val2;
+            }
+            gmap_pixels[y*map_size + x] = val;
+        }
+    for(y = map_size-2; y > 0; y--)
+        for(x = map_size-2; x > 0; x--)
+        {
+            int val = gmap_pixels[y*map_size + x];
+            int i;
+            for(i=0; i < 4; i++)
+            {
+                int val2 = gmap_pixels[(y+distance2Y[i])*map_size + (x + distance2X[i])] + step*(i % 2 == 1 ? DIAG_DIST : HV_DIST);
+                if (val2 < val)
+                  val = val2;
+            }
+            gmap_pixels[y*map_size + x] = val;
+        }
+
+}
+
 
 static void
         scan_update_xy(
@@ -343,10 +389,12 @@ void
     int k = 0;
     
     map->pixels = (pixel_t *)safe_malloc(npix * sizeof(pixel_t));
+    map->gpixels = (pixel_t *)safe_malloc(npix * sizeof(pixel_t));
     
     for (k=0; k<npix; ++k)
     {
-        map->pixels[k] = (OBSTACLE + NO_OBSTACLE) / 2;
+      map->pixels[k] = (OBSTACLE + NO_OBSTACLE) / 2;
+      map->gpixels[k] = (OBSTACLE + NO_OBSTACLE) / 2;
     }
     
     map->size_pixels = size_pixels;
@@ -361,6 +409,7 @@ void
         map_t * map)
 {
     free(map->pixels);
+    free(map->gpixels);
 }
 
 void map_string(
@@ -388,6 +437,7 @@ void
     int y1 = roundup(position.y_mm * map->scale_pixels_per_mm);
     
     int i = 0;
+    hole_width_mm = 40;
     for (i = 0; i != scan->npoints; i++)
     {        
         double x2p = costheta * scan->x_mm[i] - sintheta * scan->y_mm[i];
@@ -398,7 +448,6 @@ void
         
         double dist = sqrt(x2p * x2p + y2p * y2p);
         double add = hole_width_mm / 2 / dist;
-        
         x2p *= map->scale_pixels_per_mm * (1 + add);
         y2p *= map->scale_pixels_per_mm * (1 + add);
         
@@ -428,7 +477,8 @@ void
     int k;
     for (k=0; k<map->size_pixels*map->size_pixels; ++k)
     {
-        bytes[k] = map->pixels[k] >> 8;
+      //bytes[k] = map->gpixels[k] >> 8;
+      bytes[k] = map->pixels[k] >> 8;
     }
 }
 
@@ -563,6 +613,7 @@ position_t
         void * randomizer,
         int *distance)
 {
+    update_gradient_map(map->pixels, map->gpixels, map->size_pixels, 20);
     position_t currentpos = start_pos;
     position_t bestpos = start_pos;
     position_t lastbestpos = start_pos;
