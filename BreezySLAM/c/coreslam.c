@@ -134,8 +134,6 @@ static void
         int y1,
         int x2,
         int y2,
-        int xp,
-        int yp,
         int value,
         int alpha)
 {
@@ -158,41 +156,21 @@ static void
         int incptry = (y2 > y1) ? map_size : -map_size;
         int sincv = (value > NO_OBSTACLE) ? 1 : -1;
         
-        int derrorv = 0;
-        
-        if (dx > dy)
-        {
-            derrorv = abs(xp - x2);
-        }
-        else
+        if (dx <= dy)
         {
             swap(&dx, &dy);
             swap(&dxc, &dyc);
             swap(&incptrx, &incptry);
-            derrorv = abs(yp - y2);
         }
         
-        if (!derrorv)
-        {   /* XXX should probably throw an exception */
-            fprintf(stderr, "map_update: No error gradient: try increasing hole width\n");
-            exit(1);
-        }
-        
-        else
         {
             int error = 2 * dyc - dxc;
             int horiz = 2 * dyc;
             int diago = 2 * (dyc - dxc);
-            int errorv = derrorv / 2;
-            
-            int incv = (value - NO_OBSTACLE) / derrorv;
-            
-            int incerrorv = value - NO_OBSTACLE - derrorv * incv;
-            
             pixel_t * ptr = map_pixels + y1 * map_size + x1;
             int pixval = NO_OBSTACLE;
            
-            int endx = dx - 2 * derrorv;
+            int endx = dx - 2;
             int x = 0;
             if (dxc < endx) endx = dxc;
             for (x = 0; x <= endx; x++, ptr += incptrx)
@@ -211,36 +189,14 @@ static void
             }
             pixel_t * ptr2=ptr - incptry;
             pixel_t * ptr3=ptr + incptry;
-            for (; x <= dxc; x++, ptr += incptrx, ptr2 += incptrx, ptr3 += incptrx)
+            int val = alpha*value;
+
+            for (; x <= dxc+1; x++, ptr += incptrx, ptr2 += incptrx, ptr3 += incptrx)
             {
-                    if (x <= dx - derrorv)
-                    {
-                        pixval += incv;
-                        errorv += incerrorv;
-                        if (errorv > derrorv)
-                        {
-                            pixval += sincv;
-                            errorv -= derrorv;
-                        }
-                    }
-                    else
-                    {
-                        pixval -= incv;
-                        errorv -= incerrorv;
-                        if (errorv < 0)
-                        {
-                            pixval -= sincv;
-                            errorv += derrorv;
-                        }
-                    }
                 /* Integration into the map */
-                    //int val = alpha*pixval;
-                    int val = alpha*OBSTACLE;
                 *ptr = ((256 - alpha) * (*ptr) + val) >> 8;
-                //val /= 2;
-                //val /= 2;
-                    *ptr2 = ((256 - alpha) * (*ptr2) + val) >> 8;
-                    *ptr3 = ((256 - alpha) * (*ptr3) + val) >> 8;
+                *ptr2 = ((256 - alpha) * (*ptr2) + val) >> 8;
+                *ptr3 = ((256 - alpha) * (*ptr3) + val) >> 8;
                 
                 if (error > 0)
                 {
@@ -253,52 +209,7 @@ static void
                     error += horiz;
                 }
             }
-/*
-            for (x = 0; x <= dxc; x++, ptr += incptrx)
-            {
-                if (x > dx - 2 * derrorv)
-                {
-                    pixel_t * ptr2;
-                    if (x <= dx - derrorv)
-                    {
-                        pixval += incv;
-                        errorv += incerrorv;
-                        if (errorv > derrorv)
-                        {
-                            pixval += sincv;
-                            errorv -= derrorv;
-                        }
-                    }
-                    else
-                    {
-                        pixval -= incv;
-                        errorv -= incerrorv;
-                        if (errorv < 0)
-                        {
-                            pixval -= sincv;
-                            errorv += derrorv;
-                        }
-                    }
-                    ptr2 = ptr - incptry;
-                    *ptr2 = ((256 - alpha) * (*ptr2) + alpha * pixval/2) >> 8;
-                    ptr2 = ptr + incptry;
-                    *ptr2 = ((256 - alpha) * (*ptr2) + alpha * pixval/2) >> 8;
-                }
-               */ 
-                /* Integration into the map */
-/*
-                *ptr = ((256 - alpha) * (*ptr) + alpha * pixval) >> 8;
-                
-                if (error > 0)
-                {
-                    ptr += incptry;
-                    error += diago;
-                } else
-                {
-                    error += horiz;
-                }
-            }
-*/
+
         }
     }
 }
@@ -443,17 +354,9 @@ void
         double x2p = costheta * scan->x_mm[i] - sintheta * scan->y_mm[i];
         double y2p = sintheta * scan->x_mm[i] + costheta * scan->y_mm[i];
         
-        int xp = roundup((position.x_mm + x2p) * map->scale_pixels_per_mm);
-        int yp = roundup((position.y_mm + y2p) * map->scale_pixels_per_mm);
-        
-        double dist = sqrt(x2p * x2p + y2p * y2p);
-        double add = hole_width_mm / 2 / dist;
-        x2p *= map->scale_pixels_per_mm * (1 + add);
-        y2p *= map->scale_pixels_per_mm * (1 + add);
-        
         {  
-            int x2 = roundup(position.x_mm * map->scale_pixels_per_mm + x2p);
-            int y2 = roundup(position.y_mm * map->scale_pixels_per_mm + y2p);
+            int x2 = roundup(x1 + map->scale_pixels_per_mm * x2p);
+            int y2 = roundup(y1 + map->scale_pixels_per_mm * y2p);
             
             int value = OBSTACLE;
             int q = map_quality;
@@ -464,9 +367,11 @@ void
                 value = NO_OBSTACLE;
             }
             
-            map_laser_ray(map->pixels, map->size_pixels, x1, y1, x2, y2, xp, yp, value, q);
+            map_laser_ray(map->pixels, map->size_pixels, x1, y1, x2, y2, value, q);
         }
     }
+    update_gradient_map(map->pixels, map->gpixels, map->size_pixels, 20);
+
 }
 
 void
@@ -477,8 +382,8 @@ void
     int k;
     for (k=0; k<map->size_pixels*map->size_pixels; ++k)
     {
-      //bytes[k] = map->gpixels[k] >> 8;
-      bytes[k] = map->pixels[k] >> 8;
+      bytes[k] = map->gpixels[k] >> 8;
+      //bytes[k] = map->pixels[k] >> 8;
     }
 }
 
@@ -613,7 +518,7 @@ position_t
         void * randomizer,
         int *distance)
 {
-    update_gradient_map(map->pixels, map->gpixels, map->size_pixels, 20);
+    //update_gradient_map(map->pixels, map->gpixels, map->size_pixels, 20);
     position_t currentpos = start_pos;
     position_t bestpos = start_pos;
     position_t lastbestpos = start_pos;
