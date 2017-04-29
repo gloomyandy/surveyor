@@ -1,5 +1,4 @@
 import lejos.robotics.RegulatedMotor;
-import lejos.robotics.SampleProvider;
 import lejos.robotics.chassis.WheeledChassis;
 import lejos.robotics.chassis.Wheel;
 import lejos.robotics.localization.PoseProvider;

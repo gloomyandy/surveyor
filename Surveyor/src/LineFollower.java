@@ -1,8 +1,6 @@
 import lejos.hardware.Audio;
 import lejos.hardware.BrickFinder;
-import lejos.robotics.SampleProvider;
 import lejos.robotics.chassis.Chassis;
-import lejos.robotics.navigation.LineFollowingMoveController;
 import lejos.utility.Delay;
 
 
