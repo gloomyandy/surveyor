@@ -69,3 +69,44 @@ distance_scan_to_map(
     /* Return sum scaled by number of points, or -1 if none */
     return npoints ? (int)(sum * 1024 / npoints) : -1;  
 }
+
+int
+distance_scan_to_map_opt(
+    map_t *  map,
+    scan_t * scan,
+    position_t position,
+    double costheta,
+    double sintheta
+    )
+{
+
+    /* Pre-compute pixel offset for translation */
+    double pos_x_pix = position.x_mm * map->scale_pixels_per_mm;
+    double pos_y_pix = position.y_mm * map->scale_pixels_per_mm;
+
+    int64_t sum = 0; /* sum of map values at those points */
+    int npoints = 0; /* number of points where scan matches map */
+
+    int i = 0;
+    for (i=0; i<scan->npoints; i++)
+    {
+        /* Consider only scan points representing obstacles */
+        if (scan->value[i] == OBSTACLE)
+        {
+            /* Translate and rotate scan point to robot position */
+            int x = floor(pos_x_pix + costheta * scan->x_mm[i] - sintheta * scan->y_mm[i] + 0.5);
+            int y = floor(pos_y_pix + sintheta * scan->x_mm[i] + costheta * scan->y_mm[i] + 0.5);
+
+            /* Add point if in map bounds */
+            if (x >= 0 && x < map->size_pixels && y >= 0 && y < map->size_pixels)
+            {
+              //sum += map->pixels[y * map->size_pixels + x];
+              sum += map->gpixels[y * map->size_pixels + x];
+                npoints++;
+            }
+        }
+    }
+
+    /* Return sum scaled by number of points, or -1 if none */
+    return npoints ? (int)(sum * 1024 / npoints) : -1;
+}

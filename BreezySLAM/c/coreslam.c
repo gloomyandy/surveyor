@@ -35,6 +35,7 @@
 #include <time.h>
 #include <string.h>
 #include <math.h>
+#include <limits.h>
 
 #include "coreslam.h"
 #include "coreslam_internals.h"
@@ -47,6 +48,8 @@ static int distance2Y[] = {1, 1, 0, 1};
 #define FIX_SCALE 256
 #define HV_DIST 1*FIX_SCALE
 #define DIAG_DIST (int)(1.4142*FIX_SCALE)
+#define GRADIENT_STEP 20
+//#define GRADIENT_STEP 15
 
 /* Local helpers--------------------------------------------------- */
 
@@ -154,7 +157,6 @@ static void
         int dyc = abs(y2c - y1);
         int incptrx = (x2 > x1) ? 1 : -1;
         int incptry = (y2 > y1) ? map_size : -map_size;
-        int sincv = (value > NO_OBSTACLE) ? 1 : -1;
         
         if (dx <= dy)
         {
@@ -216,17 +218,25 @@ static void
 
 static void
         update_gradient_map(
+        int xstart,
+        int ystart,
+        int xend,
+        int yend,
         pixel_t * map_pixels,
         pixel_t * gmap_pixels,
         int map_size,
         int step)
 {
     int x, y;
-    for(y = 1; y < map_size-1; y++)
-        for(x = 1; x < map_size-1; x++)
+    for(y = ystart; y <= yend; y++)
+        for(x = xstart; x <= xend; x++)
         {
             int val = map_pixels[y*map_size + x];
             int i;
+            if (val > 5*(OBSTACLE + NO_OBSTACLE) / 8)
+              val = NO_OBSTACLE;
+            else if (val < 7*(OBSTACLE + NO_OBSTACLE) / 16)
+              val = OBSTACLE;
             for(i=0; i < 4; i++)
             {
                 int val2 = gmap_pixels[(y+distance1Y[i])*map_size + (x + distance1X[i])] + step*(i % 2 == 1 ? DIAG_DIST : HV_DIST);
@@ -235,8 +245,8 @@ static void
             }
             gmap_pixels[y*map_size + x] = val;
         }
-    for(y = map_size-2; y > 0; y--)
-        for(x = map_size-2; x > 0; x--)
+    for(y = yend; y >= ystart; y--)
+        for(x = xend; x >= xstart; x--)
         {
             int val = gmap_pixels[y*map_size + x];
             int i;
@@ -346,7 +356,10 @@ void
     
     int x1 = roundup(position.x_mm * map->scale_pixels_per_mm);
     int y1 = roundup(position.y_mm * map->scale_pixels_per_mm);
-    
+    int xmin = x1;
+    int xmax = x1;
+    int ymin = y1;
+    int ymax = y1;
     int i = 0;
     hole_width_mm = 40;
     for (i = 0; i != scan->npoints; i++)
@@ -366,11 +379,27 @@ void
                 q = map_quality / 4;
                 value = NO_OBSTACLE;
             }
-            
+            if (x2 > xmax)
+              xmax = x2;
+            else if (x2 < xmin)
+                xmin = x2;
+            if (y2 > ymax)
+              ymax = y2;
+            else if (y2 < ymin)
+                ymin = y2;
             map_laser_ray(map->pixels, map->size_pixels, x1, y1, x2, y2, value, q);
         }
     }
-    update_gradient_map(map->pixels, map->gpixels, map->size_pixels, 20);
+    xmin -= (256/GRADIENT_STEP + 1);
+    xmax += (256/GRADIENT_STEP + 1);
+    ymin -= (256/GRADIENT_STEP + 1);
+    xmax += (256/GRADIENT_STEP + 1);
+    if (xmin < 1) xmin = 1;
+    if (ymin < 1) ymin = 1;
+    if (xmax > map->size_pixels-2) xmax = map->size_pixels-2;
+    if (ymax > map->size_pixels-2) ymax = map->size_pixels-2;
+
+    update_gradient_map(xmin, ymin, xmax, ymax, map->pixels, map->gpixels, map->size_pixels, 20);
 
 }
 
@@ -382,8 +411,8 @@ void
     int k;
     for (k=0; k<map->size_pixels*map->size_pixels; ++k)
     {
-      bytes[k] = map->gpixels[k] >> 8;
-      //bytes[k] = map->pixels[k] >> 8;
+      //bytes[k] = map->gpixels[k] >> 8;
+      bytes[k] = map->pixels[k] >> 8;
     }
 }
 
@@ -508,7 +537,7 @@ scan_update(
 }
 
 position_t
-        rmhc_position_search(
+        rmhc_position_search_old(
         position_t start_pos,
         map_t * map,
         scan_t * scan,
@@ -564,6 +593,85 @@ position_t
         }
         
     }
+    *distance = lowest_distance;
+    return bestpos;
+}
+
+static int frameno = 0;
+position_t
+        rmhc_position_search(
+        position_t start_pos,
+        map_t * map,
+        scan_t * scan,
+        double sigma_xy_mm,
+        double sigma_theta_degrees,
+        int max_search_iter,
+        void * randomizer,
+        int *distance)
+{
+    //update_gradient_map(map->pixels, map->gpixels, map->size_pixels, 20);
+    position_t currentpos = start_pos;
+    position_t bestpos = start_pos;
+    position_t start = start_pos;
+    frameno++;
+    int current_distance = distance_scan_to_map(map, scan, currentpos);
+
+    int lowest_distance =  current_distance;
+    int init_dist = current_distance;
+    int counter = 0;
+    int i, j, k;
+    int besti, bestj, bestk;
+    int step=0;
+    sigma_xy_mm = sigma_xy_mm/3;
+    sigma_theta_degrees = sigma_theta_degrees/3;
+    besti = bestj = bestk = 0;
+    while(step < 3)
+    {
+        for(i = -3; i <= 3; i++)
+        {
+            currentpos.theta_degrees = start_pos.theta_degrees + (i*sigma_theta_degrees);
+            /* Pre-compute sine and cosine of angle for rotation */
+            double position_theta_radians = radians(currentpos.theta_degrees);
+            double costheta = cos(position_theta_radians) * map->scale_pixels_per_mm;
+            double sintheta = sin(position_theta_radians) * map->scale_pixels_per_mm;
+            for(j = -3; j <= 3; j++)
+            {
+                currentpos.x_mm = start_pos.x_mm + (j*sigma_xy_mm);
+                for(k = -3; k <= 3; k++)
+                {
+                    currentpos.y_mm = start_pos.y_mm + (k*sigma_xy_mm);
+                    current_distance = distance_scan_to_map_opt(map, scan, currentpos, costheta, sintheta);
+                    counter++;
+                    /* -1 indicates infinity */
+                    if ((current_distance > -1) && (current_distance < lowest_distance))
+                    {
+                        lowest_distance = current_distance;
+                        bestpos = currentpos;
+                        besti = i;
+                        bestj = j;
+                        bestk = k;
+                    }
+                }
+            }
+        }
+        // is best an inner point?
+        if ((besti != -3) && (besti != 3) && (bestj != -3) && (bestj != 3) && (bestk != -3) && (bestk != 3))
+        {
+            // yes reduce search resolution
+            sigma_theta_degrees /= 3.0;;
+            sigma_xy_mm /= 3.0;
+            step++;
+        }
+        else
+        {
+            besti = bestj = bestk = 0;
+            //printf("Best is on edge step %d pos %f %f %f\n", step, bestpos.x_mm, bestpos.y_mm, bestpos.theta_degrees);
+        }
+        //step++;
+        start_pos = bestpos;
+    }
+    //printf("frame %d search count %d\n", frameno, counter);
+    //printf("frame %d init %f %f %f dist %d best %f %f %f dist %d\n", frameno, start.x_mm, start.y_mm, start.theta_degrees, init_dist, bestpos.x_mm, bestpos.y_mm, bestpos.theta_degrees, lowest_distance);
     *distance = lowest_distance;
     return bestpos;
 }

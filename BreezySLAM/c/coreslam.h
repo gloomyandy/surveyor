@@ -152,6 +152,15 @@ distance_scan_to_map(
     scan_t * scan,
     position_t position);
 
+/* Returns -1 for infinity */
+int
+distance_scan_to_map_opt(
+    map_t *  map,
+    scan_t * scan,
+    position_t position,
+    double costheta,
+    double sintheta);
+
 
 /* Random-Mutation Hill-Climbing search */
 position_t 

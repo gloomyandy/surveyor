@@ -90,13 +90,20 @@ double sintheta = Math.sin(Math.toRadians(start_pos.theta_degrees));
         // Add offset from laser
         start_pos.x_mm += this.laser.getOffsetMm() * costheta;
         start_pos.y_mm += this.laser.getOffsetMm() * sintheta;
-        
+        long s = System.currentTimeMillis();
+                
         // Get new position from implementing class
         Position new_position = this.getNewPosition(start_pos);
-             
+        long t1 = System.currentTimeMillis() - s;
+        s = System.currentTimeMillis();
         // Update the map with this new position
         this.map.update(this.scan_for_mapbuild, new_position, this.map_quality, this.hole_width_mm);
-       
+        double xdiff = start_pos.x_mm - new_position.x_mm;
+        double ydiff = start_pos.y_mm - new_position.y_mm;
+        double thetadiff = start_pos.theta_degrees - new_position.theta_degrees;
+        while (thetadiff > 180) thetadiff -= 360;
+        while (thetadiff < -180) thetadiff += 360;
+        System.out.println("search " + t1 + " update " + (System.currentTimeMillis() - s) + " xd " + xdiff + " yd " + ydiff + " dt " + thetadiff);
         // Update the current position with this new position, adjusted by laser offset
         this.position = new Position(new_position);
         this.position.x_mm -= this.laser.getOffsetMm() * this.costheta();
