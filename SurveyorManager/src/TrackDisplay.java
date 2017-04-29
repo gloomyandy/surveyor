@@ -212,7 +212,7 @@ public class TrackDisplay extends ZoomAndPanPanel
         {
             double x = points[i*2];
             double y = points[i*2 + 1];
-            gTrack.fillRect((int)x, (int)y, 12, 12);
+            gTrack.fillRect((int)(x + 0.5), (int)(y + 0.5), 12, 12);
         }
         gTrack.setTransform(saved);
     }

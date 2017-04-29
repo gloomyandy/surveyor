@@ -80,7 +80,8 @@ public class GradientPlanner
         this.mapHeight = mapHeight;
         this.scaleX = (double)mapWidth/mapWidthMM;
         this.scaleY = (double)mapHeight/mapHeightMM;
-        robotEdgeDistance = (OCCUPIED & 0xff)*FIX_SCALE - (int)((RobotInfo.ROBOT_DIAMETER*scaleX)/2*EDGE_STEP*FIX_SCALE);
+        //robotEdgeDistance = (OCCUPIED & 0xff)*FIX_SCALE - (int)((RobotInfo.ROBOT_DIAMETER*scaleX)/2*EDGE_STEP*FIX_SCALE);
+        robotEdgeDistance = (OCCUPIED & 0xff)*FIX_SCALE - (int)((RobotInfo.ROBOT_DIAMETER*scaleX)/3*EDGE_STEP*FIX_SCALE);
     }
 
     /**

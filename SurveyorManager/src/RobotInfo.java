@@ -348,7 +348,8 @@ static long totalTime = 0;
     protected void runSlam()
     {
         // TODO Auto-generated method stub
-
+        double totalDist=0;
+        double maxDist = 0;
         while (active)
         {
             // wait for a scan
@@ -377,12 +378,17 @@ static long totalTime = 0;
                 info.update(processedScan, mapbytes, p2, slam.getDistance());
                 processedScans++;
             }
+            totalDist += info.distance;
+            if (info.distance > maxDist)
+                maxDist = info.distance;
             t = System.currentTimeMillis() - t;
             totalTime += t;
-            System.out.println("slam time " + t + " total " + totalTime);
+            System.out.println("frame " + (processedScans - 1) + " slam time " + t + " total " + totalTime);
             long allocatedMemory      = (Runtime.getRuntime().totalMemory()-Runtime.getRuntime().freeMemory());
             long presumableFreeMemory = Runtime.getRuntime().maxMemory() - allocatedMemory;
             //System.out.println("Processed " + processedScans + " memory " + presumableFreeMemory/(1024*1024));
+            if (processedScans >= rawScans)
+                System.out.printf("max dist %f avg dist %f\n", maxDist, totalDist/processedScans);
         }
         
     }
@@ -605,8 +611,10 @@ static long totalTime = 0;
         {
             FileReader fstream = new FileReader(filename);
             input = new BufferedReader(fstream);
+            int lineno = 0;
             while (true)
             {
+                //System.out.println("Line " + lineno++);
                 String line = input.readLine();
                 if (line == null)
                 {
@@ -654,6 +662,7 @@ static long totalTime = 0;
         RobotInfo.track = track;
         RobotInfo r = new RobotInfo(scans);
         Delay.msDelay(500);
+        /*
         int []scanData = new int[360];
         int []cnts = new int[360];
         int []min = new int[360];
@@ -692,6 +701,7 @@ static long totalTime = 0;
         System.out.println("avg " + (double)avg/cnt + " base " + base);
         for(int i = 0; i < 360; i++)
             System.out.printf(" %d,", (int)((double)scanData[i]/cnts[i] - a + 0.5));
+        */
         r.setState(RunState.PAUSE);
     }
     
