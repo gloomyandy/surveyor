@@ -16,9 +16,10 @@ public class ScanInfo
     //Pose[] scanPoses;
     byte[] map;
     float infraRed;
-    double distance;
+    double scanError;
+    double totalDistance;
     
-    public ScanInfo(Pose start, long sts, Pose end, long ets, int[] scan, float ir)
+    public ScanInfo(Pose start, long sts, Pose end, long ets, int[] scan, float ir, double startDistance)
     {
         if (start == null || end == null)
         {
@@ -34,8 +35,10 @@ public class ScanInfo
             double dx = end.getX() - start.getX();
             double dy = end.getY() - start.getY();
             double dt = normalize(end.getHeading() - start.getHeading());
-            velocity = new Velocities(Math.sqrt(dx*dx + dy*dy), dt, (ets - sts)/1000000.0);
+            double dist = Math.sqrt(dx*dx + dy*dy);
+            velocity = new Velocities(dist, dt, (ets - sts)/1000000.0);
             timestamp = ets;
+            totalDistance = startDistance + dist;
             
         }
         poses[POSE_ODO] = new Pose();
@@ -49,7 +52,7 @@ public class ScanInfo
         this.map = map;
         poses[POSE_SLAM] = pose;
         //this.distance = (double)distance/points.length;
-        this.distance = (double)distance*100/65500;
+        this.scanError = (double)distance*100/65500;
     }
     
     protected float normalize(float h)

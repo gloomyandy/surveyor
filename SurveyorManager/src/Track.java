@@ -83,7 +83,7 @@ public class Track
         
         public void update()
         {
-            table.setValueAt(robot.name, 0, 1);
+            table.setValueAt(String.format("%3.1f/%d", robot.totalDistance/1000, robot.curTimestamp/1000000), 0, 1);
             table.setValueAt(String.format("(%3.1f, %3.1f)[%3.1f]", robot.gyroPose.getX(), robot.gyroPose.getY(), robot.gyroPose.getHeading()), 1, 1);
             table.setValueAt(String.format("(%3.1f, %3.1f)[%3.1f]", robot.slamPose.getX(), robot.slamPose.getY(), robot.slamPose.getHeading()), 2, 1);
             if (robot.targetPose == null)
@@ -95,7 +95,7 @@ public class Track
             table.setValueAt(String.format("%3.1f", robot.infraRed), 6, 1);
             table.setValueAt(String.format("%3.1f", robot.heading), 7, 1);
             playbackTable.setValueAt(""+robot.currentScanNo+"/"+(robot.processedScans-1), 0, 1);
-            playbackTable.setValueAt(String.format("%3.1f", robot.distance), 1, 1);
+            playbackTable.setValueAt(String.format("%3.1f", robot.scanError), 1, 1);
             playbackTable.setValueAt(robot.getState(), 2, 1);
             if (!playbackPos.getValueIsAdjusting() && robot.getState() != RobotInfo.RunState.SETPOS)
                 playbackPos.setValue(robot.currentScanNo);
@@ -420,7 +420,7 @@ public class Track
         table_1 = new JTable();
         table_1.setModel(new DefaultTableModel(
             new Object[][] {
-                {"Name", null},
+                {"Dist/T", null},
                 {"Odo", null},
                 {"Slam", null},
                 {"Target", null},

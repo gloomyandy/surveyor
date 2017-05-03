@@ -41,7 +41,9 @@ public class RobotInfo
     public float targetSpeed;
     public float battery;
     public float infraRed;
-    public double distance;
+    public double scanError;
+    public double totalDistance;
+    public long curTimestamp;
     public Pose targetPose = new Pose(2560.0f, 5120.0f, 0.0f);
     final static Color[] trackColors = {Color.GREEN, Color.RED, Color.MAGENTA, Color.BLUE};
     final static String[] trackNames = {"odo", "slm", "od2", "plan"};
@@ -85,6 +87,7 @@ public class RobotInfo
         map = view.getMap();
         actualSpeed = 0.0f;
         targetSpeed = 0.0f;
+        totalDistance = 0.0;
         state = RunState.INIT;
         playbackThread = new Thread(new Runnable(){
             @Override
@@ -186,6 +189,7 @@ public class RobotInfo
         long baseTimestamp = 0;
         int lastPoseUpdate = 0;
         float newHeading=0.0f;
+        double distance = 0;
         System.out.println("Input thread running");
         while (active)
         {
@@ -205,7 +209,9 @@ public class RobotInfo
                     if (baseTimestamp == 0)
                         baseTimestamp = timestamp;
                     timestamp = timestamp - baseTimestamp;
-                    ScanInfo si = new ScanInfo(prevPose, prevTimestamp, sp, timestamp, ranges, infraRed);
+                    ScanInfo si = new ScanInfo(prevPose, prevTimestamp, sp, timestamp, ranges, infraRed, distance);
+                    totalDistance = distance = si.totalDistance;
+                    curTimestamp = si.timestamp;
                     synchronized(scanHistory)
                     {
                         scanHistory.add(si);
@@ -245,7 +251,7 @@ public class RobotInfo
                         lastPoseUpdate = processedScans;
                     }
                 }
-                if (scan != null && scan.distance < SCAN_QUALITY_THRESHOLD)
+                if (scan != null && scan.scanError < SCAN_QUALITY_THRESHOLD)
                 {
                     dos.writeBoolean(true);
                     scan.getPoseDelta().dumpObject(dos);
@@ -378,9 +384,9 @@ static long totalTime = 0;
                 info.update(processedScan, mapbytes, p2, slam.getDistance());
                 processedScans++;
             }
-            totalDist += info.distance;
-            if (info.distance > maxDist)
-                maxDist = info.distance;
+            totalDist += info.scanError;
+            if (info.scanError > maxDist)
+                maxDist = info.scanError;
             t = System.currentTimeMillis() - t;
             totalTime += t;
             System.out.println("frame " + (processedScans - 1) + " slam time " + t + " total " + totalTime);
@@ -456,8 +462,14 @@ static long totalTime = 0;
         currentScan = scanHistory.get(scanNo);
         slamPose = currentScan.poses[ScanInfo.POSE_SLAM];
         gyroPose = currentScan.poses[ScanInfo.POSE_GYRO];
-        distance = currentScan.distance;
+        scanError = currentScan.scanError;
         currentScanNo = scanNo;
+        if (currentScan.velocity.getDtSeconds() > 0)
+            actualSpeed = (float)(currentScan.velocity.getDxyMm()/currentScan.velocity.getDtSeconds());
+        else
+            actualSpeed = 0;
+        curTimestamp = currentScan.timestamp;
+        totalDistance = currentScan.totalDistance;
         refreshDisplay();
     }
     
@@ -612,6 +624,7 @@ static long totalTime = 0;
             FileReader fstream = new FileReader(filename);
             input = new BufferedReader(fstream);
             int lineno = 0;
+            double distance = 0;
             while (true)
             {
                 //System.out.println("Line " + lineno++);
@@ -630,7 +643,7 @@ static long totalTime = 0;
                 Pose pose2 = new Pose((float)Double.parseDouble(toks[7]), (float)Double.parseDouble(toks[8]), (float)Double.parseDouble(toks[9]));
 
                 int [] scan = new int [360];
-                Pose[] poses = new Pose[360];
+                //Pose[] poses = new Pose[360];
                 for (int k=0; k<scan.length; ++k)
                 {
                     scan[k] = Integer.parseInt(toks[k+24]);
@@ -646,8 +659,9 @@ static long totalTime = 0;
                     poses[k] = new Pose(Float.parseFloat(toks[24+360 + k*3]), Float.parseFloat(toks[24+360 + k*3 + 1]), Float.parseFloat(toks[24+360 + k*3 + 2]));
                 }
                 */
-                ScanInfo info = new ScanInfo(prevPose, prevTimestamp, pose, timestamp, scan, 0.0f);
+                ScanInfo info = new ScanInfo(prevPose, prevTimestamp, pose, timestamp, scan, 0.0f, distance);
                 info.poses[ScanInfo.POSE_ODO] = pose2;
+                distance = info.totalDistance;
                 //info.scanPoses = poses;
                 scans.add(info);
                 prevPose = pose;
