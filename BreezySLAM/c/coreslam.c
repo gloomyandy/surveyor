@@ -151,6 +151,7 @@ static void
     
     if (!(clip(&x2c, &y2c, x1, y1, map_size) || clip(&y2c, &x2c, y1, x1, map_size)))
     {
+    	//printf("xc %d yc %d\n", x2c, y2c);
         int dx = abs(x2 - x1);
         int dy = abs(y2 - y1);
         int dxc = abs(x2c - x1);
@@ -177,6 +178,7 @@ static void
             if (dxc < endx) endx = dxc;
             for (x = 0; x <= endx; x++, ptr += incptrx)
             {
+            	//printf("ptr %d \n", ptr - map_pixels);
                 /* Integration into the map */
                 *ptr = ((256 - alpha) * (*ptr) + alpha * pixval) >> 8;
                 
@@ -192,7 +194,8 @@ static void
             pixel_t * ptr2=ptr - incptry;
             pixel_t * ptr3=ptr + incptry;
             int val = alpha*value;
-
+//printf("x %d dxc %d inc %d\n", x, dxc, incptry);
+			if (endx >= dxc) return;
             for (; x <= dxc+1; x++, ptr += incptrx, ptr2 += incptrx, ptr3 += incptrx)
             {
                 /* Integration into the map */
@@ -362,6 +365,7 @@ void
     int ymax = y1;
     int i = 0;
     hole_width_mm = 40;
+    //printf("update1\n");
     for (i = 0; i != scan->npoints; i++)
     {        
         double x2p = costheta * scan->x_mm[i] - sintheta * scan->y_mm[i];
@@ -387,9 +391,11 @@ void
               ymax = y2;
             else if (y2 < ymin)
                 ymin = y2;
+            //printf("%d %d %d %d\n", x1, y1, x2, y2);
             map_laser_ray(map->pixels, map->size_pixels, x1, y1, x2, y2, value, q);
         }
     }
+    //printf("update2\n");
     xmin -= (256/GRADIENT_STEP + 1);
     xmax += (256/GRADIENT_STEP + 1);
     ymin -= (256/GRADIENT_STEP + 1);
@@ -398,9 +404,9 @@ void
     if (ymin < 1) ymin = 1;
     if (xmax > map->size_pixels-2) xmax = map->size_pixels-2;
     if (ymax > map->size_pixels-2) ymax = map->size_pixels-2;
-
+    //printf("update 3 %d %d %d %d\n", xmin, xmax, ymin, ymax);
     update_gradient_map(xmin, ymin, xmax, ymax, map->pixels, map->gpixels, map->size_pixels, 20);
-
+    //printf("update4\n");
 }
 
 void
@@ -535,7 +541,7 @@ scan_update(
         }
     }
 }
-
+#ifdef xxx
 position_t
         rmhc_position_search_old(
         position_t start_pos,
@@ -596,6 +602,7 @@ position_t
     *distance = lowest_distance;
     return bestpos;
 }
+#endif
 
 static int frameno = 0;
 position_t
