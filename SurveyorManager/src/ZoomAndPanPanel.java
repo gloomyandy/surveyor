@@ -72,6 +72,8 @@ public class ZoomAndPanPanel extends JPanel {
         @Override public void mouseWheelMoved(MouseWheelEvent e) {
             //System.out.println("Start wheel");
             int dir = e.getWheelRotation();
+            //System.out.println("wheel " + dir);
+            if (dir == 0) return;
             int z = zoomRange.getValue();
             zoomRange.setValue(z + EXTENT * (dir > 0 ? -1 : 1));
             if (z != zoomRange.getValue()) {

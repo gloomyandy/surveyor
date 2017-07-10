@@ -81,7 +81,7 @@ public class GradientPlanner
         this.scaleX = (double)mapWidth/mapWidthMM;
         this.scaleY = (double)mapHeight/mapHeightMM;
         //robotEdgeDistance = (OCCUPIED & 0xff)*FIX_SCALE - (int)((RobotInfo.ROBOT_DIAMETER*scaleX)/2*EDGE_STEP*FIX_SCALE);
-        robotEdgeDistance = (OCCUPIED & 0xff)*FIX_SCALE - (int)((RobotInfo.ROBOT_DIAMETER*scaleX)/3*EDGE_STEP*FIX_SCALE);
+        robotEdgeDistance = (OCCUPIED & 0xff)*FIX_SCALE - (int)((RobotInfo.ROBOT_DIAMETER*scaleX*6)/10*EDGE_STEP*FIX_SCALE);
     }
 
     /**
@@ -468,8 +468,15 @@ public class GradientPlanner
                     if (y > yMax) yMax = y;
                 }
             }
-        for (int x = xMin-1; x <= xMax+1; x++)
-            for(int y = yMin-1; y <= yMax+1; y++)
+        xMin--; xMax++;
+        yMin--; yMax++;
+        if (xMin < 0) xMin = 0;
+        if (xMax > mapWidth/10) yMax = mapHeight/10;
+        if (yMin < 0) xMin = 0;
+        if (yMax > mapWidth/10) yMax = mapHeight/10;
+        
+        for (int x = xMin; x < xMax; x++)
+            for(int y = yMin; y < yMax; y++)
                 if (isTarget[x][y])
                 {
                     int x10 = x*10 + 5;
