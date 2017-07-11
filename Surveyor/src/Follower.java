@@ -82,7 +82,7 @@ public class Follower
         if (!calLoaded)
         {
             System.out.println("Fail to load calibration data");
-            System.exit(0);
+            //System.exit(0);
         }
         imu.setMode(BNO055.opmode_t.OPERATION_MODE_NDOF);
         //imu.setMode(BNO055.opmode_t.OPERATION_MODE_IMUPLUS);
@@ -154,7 +154,7 @@ public class Follower
         
         Pose pose = new Pose();
         pose.setHeading(0.0f);
-        pose.setLocation(2560, 5120);
+        pose.setLocation(1280, 10240 - 1280);
         StatusTracker status = null;
         try
         {
