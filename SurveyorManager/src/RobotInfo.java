@@ -24,6 +24,8 @@ public class RobotInfo
     public static final int SHOW_SCANS=SHOW_PATH_PLANNING+1;
     public static final int SHOW_SCAN_HISTORY=SHOW_SCANS+1;
     public static final int SHOW_CNT = SHOW_SCAN_HISTORY+1;
+    public static final float HOME_X = 1280.0f;
+    public static final float HOME_Y = (10240.0f - 1280.0f);
     public boolean[] displayOptions = {false, true, false, false, true, false};
     
     public static enum RunState{INIT, PAUSE, PLAY, STEP, BACK, FORWARD, START, END, REWIND, SETPOS, RUN, RUNPAUSE, EXIT};
@@ -44,7 +46,7 @@ public class RobotInfo
     public double scanError;
     public double totalDistance;
     public long curTimestamp;
-    public Pose targetPose = new Pose(2560.0f, 5120.0f, 0.0f);
+    public Pose targetPose = new Pose(HOME_X, HOME_Y, 0.0f);
     final static Color[] trackColors = {Color.GREEN, Color.RED, Color.MAGENTA, Color.BLUE};
     final static String[] trackNames = {"odo", "slm", "od2", "plan"};
     
@@ -64,6 +66,8 @@ public class RobotInfo
     protected static final int LIDAR_OFFSET = 55;
     protected static final int ROBOT_DIAMETER = 250;
     protected Laser laser = new Laser(360, 1.0/2.0, 360.0, 10000, 0, LIDAR_OFFSET);
+    //public static int    MAP_SIZE_PIXELS = 1024;
+    //public static double MAP_SIZE_METERS = 10.24;
     public static int    MAP_SIZE_PIXELS = 1024;
     public static double MAP_SIZE_METERS = 10.24;
     private static int    SCAN_SIZE       = 360;
@@ -76,7 +80,7 @@ public class RobotInfo
     public PlanState planState = PlanState.NONE;
     public GradientPlanner plan;
     protected float heading = 0f;
-    protected Pose homePose = new Pose(2560, 5120, 0);
+    protected Pose homePose = new Pose(HOME_X, HOME_Y, 0);
 
 
 
@@ -316,7 +320,9 @@ public class RobotInfo
         case PLAN:
             newPose = p;
             newPlan = new GradientPlanner(currentScan.map, MAP_SIZE_PIXELS, MAP_SIZE_PIXELS, (int)(MAP_SIZE_METERS*1000), (int)(MAP_SIZE_METERS*1000) );
-            if (!newPlan.findPath(slamPose, p))
+            int pathState = newPlan.findPath(slamPose, p, true);
+            System.out.println("Path state " + pathState);
+            if (pathState == GradientPlanner.UNREACHABLE || (pathState == GradientPlanner.INVALID && newPlan.findPath(slamPose, p, false) != GradientPlanner.VALID))
             {
                 System.out.println("No path");
                 newPlan = null;
@@ -475,9 +481,9 @@ static long totalTime = 0;
     
     protected void step(int step)
     {
+        gotoScan(currentScanNo + step);
         if (planState == PlanState.PLAN || planState == PlanState.EXPLORE)
             setTargetPose(targetPose, planState);
-        gotoScan(currentScanNo + step);
     }
 
     private void updateDisplay()

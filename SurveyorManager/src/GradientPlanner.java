@@ -40,6 +40,9 @@ class CompareState implements Comparator<State>
 
 public class GradientPlanner
 {
+    public static final int UNREACHABLE = 0;
+    public static final int INVALID = -1;
+    public static final int VALID = 1;
     protected List<Point> frontiers;
     protected byte[] map;
     protected int mapWidth;
@@ -69,6 +72,7 @@ public class GradientPlanner
     protected static final int UNKNOWN = 253;
     protected static final int FRONTIER = 252;
     protected final int robotEdgeDistance;
+    protected final int minEdgeDistance = (OCCUPIED & 0xff)*FIX_SCALE;
     
     protected int reprocess=0;
 
@@ -138,8 +142,9 @@ public class GradientPlanner
      * peaks. Obstacles are expanded by the safe size of the robot to allow a simple point to be used to
      * represent positions and paths.
      */
-    protected void buildCostMap()
+    protected void buildCostMap(int edgeDistance)
     {
+        System.out.println("edge dist " + edgeDistance);
         synchronized(this)
         {
             long s = System.currentTimeMillis();
@@ -183,7 +188,7 @@ public class GradientPlanner
                 for(int x = 0; x < mapWidth; x++)
                 {
                     value = cm[x][y];
-                    if (value < robotEdgeDistance)
+                    if (value < edgeDistance)
                     {
                         if (((int)map[y*mapWidth + x] & 0xff) == 127)
                             value = UNKNOWN;
@@ -549,32 +554,43 @@ public class GradientPlanner
 
     }
     
-    
-    public boolean findPath(Pose start, Pose target)
+    protected boolean isValidLocation(int x, int y)
     {
-        buildCostMap();
-        int x = (int)(start.getX()*scaleX);
-        int y = (int)(start.getY()*scaleY);
-        if (costMap[y*mapWidth + x] >= EXPANDED)
-            return false;
-        x = (int)(target.getX()*scaleX);
-        y = (int)(target.getY()*scaleY);
-        if (costMap[y*mapWidth + x] >= EXPANDED)
-            return false;
+        return ((int)costMap[y*mapWidth + x] & 0xff) < EXPANDED;
+    }
+    
+    protected boolean isReachableFrom(int x, int y)
+    {
+        return costs[x][y] != 0;
+    }
+    
+    public int findPath(Pose start, Pose target, boolean safe)
+    {
+        buildCostMap(safe ? robotEdgeDistance : minEdgeDistance);
+        int xStart = (int)(start.getX()*scaleX);
+        int yStart = (int)(start.getY()*scaleY);
+        if (!isValidLocation(xStart, yStart))
+            return INVALID;
+        int xTarget = (int)(target.getX()*scaleX);
+        int yTarget = (int)(target.getY()*scaleY);
+        if (!isValidLocation(xTarget, yTarget))
+            return INVALID;
         costs = new int[mapWidth][mapHeight];
         CompareState stateCompare = new CompareState();
         PriorityQueue<State> queue = new PriorityQueue<State>(100, stateCompare);
-        addTarget(queue, x, y);
+        addTarget(queue, xTarget, yTarget);
         search(queue);
-        return true;
+        if (!isReachableFrom(xStart, yStart))
+            return UNREACHABLE;
+        return 1;
     }
 
     public boolean explore(Pose start)
     {
-        buildCostMap();
+        buildCostMap(robotEdgeDistance);
         int x = (int)(start.getX()*scaleX);
         int y = (int)(start.getY()*scaleY);
-        if (costMap[y*mapWidth + x] >= EXPANDED)
+        if (((int)costMap[y*mapWidth + x] & 0xff) >= EXPANDED)
             return false;
         costs = new int[mapWidth][mapHeight];
         CompareState stateCompare = new CompareState();

@@ -191,7 +191,7 @@ public class Track
                 }
             }
         });
-        RobotInfo.loadHistory(window, "/home/andy/git/surveyor/datafiles/log21.dat");
+        RobotInfo.loadHistory(window, "/home/andy/git/surveyor/datafiles/log24.dat");
         //RobotInfo.loadHistory(window, "/home/andy/git/surveyor/Surveyor/bin/log.dat");
         RobotInfo.waitForRobots(window);
     }
