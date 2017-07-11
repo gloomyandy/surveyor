@@ -42,7 +42,7 @@ public abstract class SinglePositionSLAM extends CoreSLAM
 
     public void reset()
     {
-        this.position = new Position(250.0*this.map.sizeMeters(), this.init_coord_mm(), 0);
+        this.position = new Position(125.0*this.map.sizeMeters(), (1000.0 - 125.0)*this.map.sizeMeters(), 0);
         map.reset();
     }
 
